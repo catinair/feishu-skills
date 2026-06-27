@@ -1,0 +1,10 @@
+{
+  "default_identity": "user",
+  "user": {
+    "name": "你的名字",
+    "user_id": "",
+    "open_id": "",
+    "department": "",
+    "role": ""
+  }
+}

@@ -1,0 +1,38 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+
+config/credentials.json
+downloads/
+test_downloads/
+
+.pytest_cache/
+.mypy_cache/
+
+# 个人/团队敏感配置（分发时排除）
+config/settings.json
+config/permissions.json
+config/risk_policy.json
+
+# 可选依赖环境
+.venv/
+venv/
+.env
+
+# 分发构建产物
+dist/
+build/
+*.egg-info/
+config/_auth_url.txt
+
+# 用户自定义扩展（拉取上游更新时不被覆盖）
+custom/*
+!custom/.gitkeep
+!custom/README.md
+!custom/SKILL.md
+
+# Claude Code 本地配置
+.claude/
+
+# MCP 工具配置
+.zion-mcp/

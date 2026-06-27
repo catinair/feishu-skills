@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "workspace": {
+    "trusted_folder_tokens": [
+      {
+        "token": "fld_xxx",
+        "label": "默认工作文件夹",
+        "default": true
+      }
+    ]
+  },
+  "messaging": {
+    "trusted_users": [
+      {
+        "name": "测试联系人",
+        "user_id": "",
+        "reason": "唯一指定测试私聊联系人"
+      }
+    ],
+    "trusted_chats": [
+      {
+        "name": "测试群",
+        "chat_id": "oc_xxx",
+        "reason": "唯一指定测试群"
+      }
+    ],
+    "restricted_chats": [],
+    "always_confirm_actions": [
+      "im_send_message",
+      "im_create_chat",
+      "im_chat_add_members",
+      "im_chat_update"
+    ]
+  },
+  "writes": {
+    "allow_without_confirmation": [
+      {
+        "action": "doc_create",
+        "within_trusted_folder_only": true
+      },
+      {
+        "action": "sheet_create",
+        "within_trusted_folder_only": true
+      },
+      {
+        "action": "base_create",
+        "within_trusted_folder_only": true
+      },
+      {
+        "action": "drive_upload",
+        "within_trusted_folder_only": true
+      },
+      {
+        "action": "drive_copy",
+        "within_trusted_folder_only": true
+      }
+    ],
+    "always_confirm_actions": [
+      "doc_write",
+      "sheet_write",
+      "sheet_append",
+      "base_append",
+      "base_update",
+      "base_delete",
+      "base_batch_update",
+      "base_batch_delete",
+      "calendar_create_event",
+      "calendar_delete_event",
+      "perm_doc_share",
+      "perm_doc_remove",
+      "wiki_create_node"
+    ],
+    "manual_only_actions": [
+      "drive_delete",
+      "drive_move_non_trusted_target",
+      "im_chat_remove_members",
+      "bulk_delete_documents",
+      "bulk_delete_calendar_events"
+    ]
+  },
+  "credentials": {
+    "user_access_token": {
+      "allowed_for": [
+        "minutes",
+        "contact_full_profile"
+      ],
+      "rules": [
+        "不要在对话中回显完整 token",
+        "token 过期后重新获取",
+        "优先通过凭证文件（resolver 自动定位）或运行时参数传入"
+      ]
+    }
+  }
+}
