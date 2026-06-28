@@ -14,14 +14,16 @@ metadata:
 
 ## 权限要求
 
-| 脚本 | 所需权限 | 状态 |
+> **说明**：以下标注的审批要求基于常见企业配置。实际是否需要管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
+
+| 脚本 | 所需权限 | 审批说明 |
 |------|---------|------|
-| sheet_create.py | `sheets:spreadsheet` / `sheets:spreadsheet:create` | 已开通 |
-| sheet_info.py | `sheets:spreadsheet` | 已开通 |
-| sheet_read.py | `sheets:spreadsheet` | 已开通 |
-| sheet_write.py | `sheets:spreadsheet` | 已开通 |
-| sheet_append.py | `sheets:spreadsheet` | 已开通 |
-| sheet_export_csv.py | `docs:document:export` / `drive:file:download` | **需申请** |
+| sheet_create.py | `sheets:spreadsheet` / `sheets:spreadsheet:create` | 一般无需管理员审批 |
+| sheet_info.py | `sheets:spreadsheet` | 一般无需管理员审批 |
+| sheet_read.py | `sheets:spreadsheet` | 一般无需管理员审批 |
+| sheet_write.py | `sheets:spreadsheet` | 一般无需管理员审批 |
+| sheet_append.py | `sheets:spreadsheet` | 一般无需管理员审批 |
+| sheet_export_csv.py | `docs:document:export` / `drive:file:download` | 通常需管理员审批 |
 
 ## 快捷命令
 
@@ -86,7 +88,7 @@ python3 feishu-sheets/sheet_export_csv.py \
 **注意**：
 - 不指定 `--sheet-id` 时自动导出第一个 sheet
 - CSV 是纯文本格式，AI 可直接读取
-- 需开通 `docs:document:export` 权限
+- 需开通 `docs:document:export` 权限；若使用 `drive:file:download` 导出，还需飞书管理员审批。
 
 ## 工作流程
 

@@ -37,7 +37,7 @@ python3 feishu-im/im_send_message.py --chat-id xxx --text "测试消息"
 ## 三、权限与授权相关
 
 - [ ] 新增端点所需 scope 已加入 `feishu-auth/auth_get_user_token.py` 的 `_DEFAULT_SCOPES`
-- [ ] 新增 scope 属于免审权限还是管理员审批权限已确认（参考 `ADMIN_APPROVAL_SCOPES`）
+- [ ] 新增 scope 属于通常无需管理员审批还是通常需管理员审批已确认（参考 `ADMIN_APPROVAL_SCOPES`，具体以企业管理员配置的审核规则为准）
 - [ ] 需要管理员审批的 scope 已在 `SKILL.md` 或文档中标注
 - [ ] 若修改了默认 scope，建议重新运行 `python3 feishu-auth/auth_get_user_token.py` 刷新 token
 

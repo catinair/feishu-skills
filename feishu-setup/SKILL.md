@@ -54,9 +54,10 @@ python3 feishu-setup/setup_check.py --suggest-scopes
 | IM | `im:message` | 发送消息 |
 | 通讯录 | `contact:user.base:readonly` | 通讯录查询 |
 
-**完整推荐**：运行 `--suggest-scopes` 查看全部约 35 个免审 scope。
+**完整推荐**：运行 `--suggest-scopes` 查看全部约 35 个通常无需管理员审批的 scope。
 
 > 标注「需管理员审批」的 scope 可跳过，对应功能暂不可用，后续按需申请。
+> 具体是否需要管理员审批，取决于你所在企业管理员配置的自建应用审核规则。
 
 ### 3. 配置重定向 URL
 

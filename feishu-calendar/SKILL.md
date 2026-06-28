@@ -16,15 +16,17 @@ metadata:
 
 ## 权限要求
 
-| 脚本 | 所需权限 | 状态 |
-|------|---------|------|
-| calendar_list_events.py | `calendar:calendar` / `calendar:calendar:readonly` | 需确认 |
-| calendar_get_event.py | `calendar:calendar` / `calendar:calendar:readonly` | 需确认 |
-| calendar_create_event.py | `calendar:calendar` | 需确认 |
-| calendar_delete_event.py | `calendar:calendar` | 需确认 |
-| calendar_freebusy.py | `calendar:calendar.freebusy:readonly` + `contact:user.base:readonly` | 需确认 |
-| calendar_update_event.py | `calendar:calendar.event:update` | 免审 |
-| calendar_list_calendars.py | `calendar:calendar:read` | 免审 |
+> **说明**：以下标注的审批要求基于常见企业配置。实际是否需要管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
+
+| 脚本 | 所需权限 | 审批说明 |
+|------|---------|----------|
+| calendar_list_events.py | `calendar:calendar` / `calendar:calendar:readonly` | 一般无需管理员审批 |
+| calendar_get_event.py | `calendar:calendar` / `calendar:calendar:readonly` | 一般无需管理员审批 |
+| calendar_create_event.py | `calendar:calendar` | 一般无需管理员审批 |
+| calendar_delete_event.py | `calendar:calendar` | 一般无需管理员审批 |
+| calendar_freebusy.py | `calendar:calendar.freebusy:readonly` + `contact:user.base:readonly` | 一般无需管理员审批 |
+| calendar_update_event.py | `calendar:calendar.event:update` | 一般无需管理员审批 |
+| calendar_list_calendars.py | `calendar:calendar:read` | 一般无需管理员审批 |
 
 ## 快捷命令
 

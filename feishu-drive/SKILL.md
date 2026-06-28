@@ -14,20 +14,22 @@ metadata:
 
 ## 权限要求
 
-| 脚本 | 所需权限 | 状态 |
-|------|---------|------|
-| drive_search.py | `drive:drive.search:readonly` | 已开通 |
-| drive_list.py | `drive:drive.search:readonly` | 已开通 |
-| drive_copy.py | `drive:file` | 已开通 |
-| drive_download.py | `drive:file` / `docs:document.media:download` | 已开通 |
-| drive_upload.py | `drive:file` | 已开通 |
-| drive_move.py | `drive:drive` 或 `space:document:move` | **需申请** |
-| drive_delete.py | `drive:drive` 或 `space:document:delete` | **需申请** |
-| drive_export.py | `docs:document.content:read` / `docs:document:export` | **需申请** |
+> **说明**：以下标注的审批要求基于常见企业配置。实际是否需要管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
+
+| 脚本 | 所需权限 | 审批说明 |
+|------|---------|----------|
+| drive_search.py | `drive:drive.search:readonly` | 一般无需管理员审批 |
+| drive_list.py | `drive:drive.search:readonly` | 一般无需管理员审批 |
+| drive_copy.py | `drive:file` | 通常需管理员审批 |
+| drive_download.py | `drive:file` / `docs:document.media:download` | 通常需管理员审批 |
+| drive_upload.py | `drive:file` | 通常需管理员审批 |
+| drive_move.py | `drive:drive` 或 `space:document:move` | 通常需管理员审批 |
+| drive_delete.py | `drive:drive` 或 `space:document:delete` | 通常需管理员审批 |
+| drive_export.py | `docs:document.content:read` / `docs:document:export` | 一般无需管理员审批 |
 
 > **注意**：
-> - `drive:drive` 是高级权限，包含文件的移动、删除、重命名等管理操作。当前应用尚未开通，如需使用 move/delete，请在飞书开放平台申请该权限。
-> - `drive_export.py` 需要 `docs:document:export` 权限，如遇 `99991672` 权限错误，请在飞书开放平台申请。
+> - `drive:drive` 是高级权限，包含文件的移动、删除、重命名等管理操作，通常需要飞书管理员审批。如需使用 move/delete，请在飞书开放平台申请该权限并联系管理员审批。
+> - `drive_export.py` 需要 `docs:document:export` 权限，如遇 `99991672` 权限错误，请在飞书开放平台检查该权限是否已添加。
 
 ## 快捷命令
 

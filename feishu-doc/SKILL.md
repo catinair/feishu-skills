@@ -14,16 +14,20 @@ metadata:
 
 ## 权限要求
 
-| 脚本 | 所需权限 | 状态 |
-|------|---------|------|
-| doc_token.py | 无 | 已开通 |
-| doc_create.py | `docx:document:create` | 已开通 |
-| doc_write.py | `docx:document.block:convert` | 已开通 |
-| doc_read.py | `docx:document:readonly` | 已开通 |
-| doc_fetch.py | `docx:document:readonly` + `docs:document.media:download` | 已开通 |
-| doc_comments.py（查看） | `docs:document.comment:read`（或 `docs:doc:readonly` / `drive:drive:readonly`） | 已开通 |
-| doc_comments.py（创建） | `docs:document.comment:create`（或 `docs:doc` / `drive:drive`） | 已开通 |
-| doc_comments.py（回复） | `docs:document.comment:create`（或 `docs:doc` / `drive:drive`） | 已开通 |
+> **说明**：以下标注的审批要求基于常见企业配置。实际是否需要管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
+
+| 脚本 | 所需权限 | 审批说明 |
+|------|---------|----------|
+| doc_token.py | 无 | 一般无需管理员审批 |
+| doc_create.py | `docx:document:create` | 一般无需管理员审批 |
+| doc_write.py | `docx:document.block:convert` | 一般无需管理员审批 |
+| doc_read.py | `docx:document:readonly` | 一般无需管理员审批 |
+| doc_fetch.py | `docx:document:readonly` + `docs:document.media:download` | 一般无需管理员审批 |
+| doc_comments.py（查看） | `docs:document.comment:read`（或 `docs:doc:readonly` / `drive:drive:readonly`） | 一般无需管理员审批 |
+| doc_comments.py（创建） | `docs:document.comment:create`（或 `docs:doc` / `drive:drive`） | 一般无需管理员审批 |
+| doc_comments.py（回复） | `docs:document.comment:create`（或 `docs:doc` / `drive:drive`） | 一般无需管理员审批 |
+
+> **注意**：标注为「一般无需管理员审批」的 scope 仍需在飞书开放平台 → 权限管理中开通；若你的企业启用了严格审核策略，也可能需要管理员审批。
 
 ## 快捷命令
 
