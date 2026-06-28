@@ -53,6 +53,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent))
 from feishu_common import FeishuClient, cli_run, write_default_risk_policy
+from feishu_common._endpoint_registry import ENDPOINT_REGISTRY, BOTH, USER_ONLY
 from feishu_common._config_loader import (
     resolve_config_path,
     get_config_dir,
@@ -65,8 +66,9 @@ _SCOPE_FIXES = {
     "im:message.send_as_user": "im:message",
 }
 
-# 完整推荐 scopes（覆盖所有 endpoint registry 中声明的 user scopes）
-# 首次授权时使用此列表，后续从 permissions.json 读取
+# Fallback 推荐 scopes：当无法从应用已开通权限推导时使用。
+# 正常流程下，授权请求的 user scope 应基于 permissions.json 中已开通的 tenant scopes
+# 从 endpoint registry 自动推导，而不是使用此硬编码列表。
 _DEFAULT_SCOPES = sorted({
     # 基础
     "offline_access",
@@ -132,29 +134,73 @@ _DEFAULT_SCOPES = sorted({
 })
 
 
-def _load_user_scopes():
-    """加载 user scopes，将 permissions.json 中已有的与代码推荐列表合并。
+def _derive_user_scopes_from_tenant_scopes(tenant_scopes):
+    """根据应用已开通的 tenant scopes，从 endpoint registry 推导需要的 user scopes。
 
-    这样新增端点后，无需用户手动修改 permissions.json，重新授权时会自动请求新 scope。
-    首次授权（permissions.json 不存在）时直接返回完整推荐 scopes。
+    规则：对于每个支持 user 身份的端点，如果其所需的 tenant scopes 非空且已全部开通，
+    则将该端点所需的 user scopes 加入推荐列表。tenant scopes 为空的端点（纯 user 接口）
+    不纳入推导，避免申请超出应用能力范围的权限。
     """
+    tenant_set = set(tenant_scopes)
+    user_scopes = set()
+    for config in ENDPOINT_REGISTRY.values():
+        identity = config.get("identity")
+        if identity not in (BOTH, USER_ONLY):
+            continue
+        required_tenant = set(config.get("scopes", {}).get("tenant", []))
+        if not required_tenant:
+            # 纯 user 接口，无法从 tenant 开通情况推导
+            continue
+        if not required_tenant.issubset(tenant_set):
+            continue
+        user_scopes.update(config.get("scopes", {}).get("user", []))
+    return sorted(user_scopes)
+
+
+def _load_tenant_scopes():
+    """从 permissions.json 读取已同步的 tenant scopes。"""
     path = resolve_config_path("permissions.json")
-    default_set = set(_DEFAULT_SCOPES)
     if not path.exists():
-        return sorted(default_set)
+        return []
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        return sorted(default_set)
-    existing = set(data.get("scopes", {}).get("user", []))
-    if not existing:
-        return sorted(default_set)
-    merged = existing | default_set
+        return []
+    return list(data.get("scopes", {}).get("tenant", []))
+
+
+def _load_user_scopes(client=None):
+    """确定 OAuth 授权时应申请的 user scopes。
+
+    优先根据 permissions.json 中已开通的 tenant scopes 推导对应的 user scopes。
+    如果 permissions.json 中 tenant scopes 为空且提供了 client，则尝试自动同步一次。
+    如果都无法获取，回退到 _DEFAULT_SCOPES 并给出警告。
+    """
+    tenant_scopes = _load_tenant_scopes()
+    if not tenant_scopes and client is not None:
+        try:
+            from auth_sync_permissions import fetch_tenant_scopes
+            tenant_scopes = fetch_tenant_scopes(client)
+            print(f"   已自动从飞书同步应用权限（{len(tenant_scopes)} 项）用于推导 user scope", file=sys.stderr)
+        except Exception as e:
+            print(f"   ⚠ 无法自动同步应用权限: {e}，将使用默认 scope 列表", file=sys.stderr)
+
+    if tenant_scopes:
+        derived = set(_derive_user_scopes_from_tenant_scopes(tenant_scopes))
+        # 始终保留基础 scope
+        merged = derived | {"offline_access", "auth:user.id:read"}
+        # 应用 _SCOPE_FIXES 修正
+        fixed = set()
+        for s in merged:
+            fixed.add(_SCOPE_FIXES.get(s, s))
+        return sorted(fixed), "derived"
+
+    merged = set(_DEFAULT_SCOPES)
     fixed = set()
     for s in merged:
         fixed.add(_SCOPE_FIXES.get(s, s))
-    fixed.add("offline_access")
-    return sorted(fixed)
+    print("   ⚠ 未找到应用已开通权限，OAuth 将使用默认 scope 列表（可能包含未开通权限）", file=sys.stderr)
+    return sorted(fixed), "fallback"
 
 
 def exchange_code_for_token(client, code, redirect_uri):
@@ -335,10 +381,12 @@ def main():
     # Step 1: Determine scopes
     if args.scope:
         scopes = sorted(set(args.scope.split()))
+        scope_source = "manual"
     elif args.minimal:
         scopes = ["offline_access"]
+        scope_source = "minimal"
     else:
-        scopes = _load_user_scopes()
+        scopes, scope_source = _load_user_scopes(client)
 
     scope_str = " ".join(scopes)
 
@@ -385,6 +433,12 @@ def main():
         if not codes:
             raise RuntimeError(f"无法从 URL 中提取 code，请检查回调 URL: {callback_url}")
         code = codes[0]
+
+    # 已获取 code，清理临时授权链接文件
+    try:
+        auth_url_path.unlink()
+    except Exception:
+        pass
 
     # Step 4: Exchange code for token (OAuth v2)
     print("\n正在换取 user_access_token...", file=sys.stderr)

@@ -142,7 +142,11 @@ def check_credentials():
 
 
 def check_settings():
-    """settings.json 存在且有 user.name 和 default_identity"""
+    """settings.json 存在且配置有效。
+
+    tenant 模式下只需 default_identity 为 tenant；
+    user 模式下额外需要 user.name。
+    """
     path = resolve_config_path("settings.json")
     result = {"settings_ready": False, "default_identity": None, "user_name": None}
 
@@ -159,12 +163,18 @@ def check_settings():
     result["default_identity"] = data.get("default_identity", "user")
     user = data.get("user", {})
     result["user_name"] = user.get("name", "")
-    result["settings_ready"] = bool(result["user_name"])
 
-    if not result["settings_ready"]:
-        result["settings_detail"] = "缺少 user.name"
-    else:
+    if result["default_identity"] == "tenant":
+        result["settings_ready"] = True
         result["settings_detail"] = "OK"
+    elif result["default_identity"] == "user":
+        result["settings_ready"] = bool(result["user_name"])
+        if not result["settings_ready"]:
+            result["settings_detail"] = "user 模式下缺少 user.name"
+        else:
+            result["settings_detail"] = "OK"
+    else:
+        result["settings_detail"] = f"无效的 default_identity: {result['default_identity']}"
     return result
 
 

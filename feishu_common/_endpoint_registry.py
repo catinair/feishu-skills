@@ -235,31 +235,31 @@ ENDPOINT_REGISTRY = {
     # ── IM ───────────────────────────────────────────────────────────
     "im_create_chat": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:chat"], "user": ["im:chat"]},
+        "scopes": {"tenant": ["im:chat:create"], "user": ["im:chat:create"]},
     },
     "im_send_text": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message:send"]},
     },
     "im_send_post": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message:send"]},
     },
     "im_messages_list": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:chat:readonly"], "user": ["im:message:readonly"]},
+        "scopes": {"tenant": ["im:message:readonly"], "user": ["im:message:readonly"]},
     },
     "im_reply_message": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send"], "user": ["im:message:send"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message:send"]},
     },
     "im_send_file": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send"], "user": ["im:message:send"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message:send"]},
     },
     "im_send_image": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send"], "user": ["im:message:send"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message:send"]},
     },
     "upload_image": {
         "identity": APP_ONLY,
@@ -279,11 +279,11 @@ ENDPOINT_REGISTRY = {
     },
     "im_chat_update": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:chat"], "user": ["im:chat"]},
+        "scopes": {"tenant": ["im:chat:update"], "user": ["im:chat:update"]},
     },
     "im_search_messages": {
-        "identity": BOTH,
-        "scopes": {"tenant": ["im:message:readonly"], "user": ["im:message"]},
+        "identity": USER_ONLY,
+        "scopes": {"tenant": [], "user": ["search:message"]},
     },
     "im_list_chats": {
         "identity": BOTH,

@@ -1,5 +1,5 @@
 {
-  "default_identity": "user",
+  "default_identity": "tenant",
   "user": {
     "name": "你的名字",
     "user_id": "",

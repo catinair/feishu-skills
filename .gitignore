@@ -31,6 +31,9 @@ config/settings.json
 config/permissions.json
 config/risk_policy.json
 
+# 运行时派生缓存
+config/.token_cache.json
+
 # 可选依赖环境
 .venv/
 venv/
