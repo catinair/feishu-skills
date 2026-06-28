@@ -431,9 +431,95 @@ def _config_dir_source():
     return "skill_root"
 
 
+def print_suggest_scopes():
+    """输出推荐 scope 列表，供用户在飞书控制台批量搜索开通。"""
+    from feishu_common._endpoint_registry import ENDPOINT_REGISTRY
+
+    # 收集所有 user scopes
+    all_user_scopes = set()
+    for entry in ENDPOINT_REGISTRY.values():
+        all_user_scopes.update(entry.get("scopes", {}).get("user", []))
+
+    # 合并推荐 scopes
+    merged = sorted(RECOMMENDED_USER_SCOPES | all_user_scopes)
+
+    print("=" * 50)
+    print("推荐开通的 scope 列表")
+    print("=" * 50)
+    print()
+    print("在飞书开放平台 → 权限管理 中，搜索以下 scope 名称并开通：")
+    print()
+
+    # 按类别分组输出
+    categories = {
+        "基础": ["offline_access", "auth:user.id:read"],
+        "IM 消息": [],
+        "通讯录": [],
+        "文档": [],
+        "云空间": [],
+        "表格": [],
+        "多维表格": [],
+        "知识库": [],
+        "日程": [],
+        "任务": [],
+        "妙记": [],
+        "权限管理": [],
+        "画板": [],
+    }
+    category_keywords = {
+        "IM 消息": "im:",
+        "通讯录": "contact:",
+        "文档": ["docx:", "docs:document.comment"],
+        "云空间": ["drive:", "space:"],
+        "表格": "sheets:",
+        "多维表格": ["bitable:", "base:"],
+        "知识库": "wiki:",
+        "日程": "calendar:",
+        "任务": "task:",
+        "妙记": "minutes:",
+        "权限管理": "docs:permission",
+        "画板": "board:",
+    }
+
+    for scope in merged:
+        placed = False
+        for cat, keywords in category_keywords.items():
+            if isinstance(keywords, list):
+                if any(scope.startswith(k) for k in keywords):
+                    categories[cat].append(scope)
+                    placed = True
+                    break
+            elif scope.startswith(keywords):
+                categories[cat].append(scope)
+                placed = True
+                break
+        if not placed and scope not in categories["基础"]:
+            categories["基础"].append(scope)
+
+    for cat, scopes in categories.items():
+        if not scopes:
+            continue
+        print(f"  【{cat}】")
+        for s in scopes:
+            is_admin = s in ADMIN_APPROVAL_SCOPES
+            suffix = "  ← 需管理员审批" if is_admin else ""
+            print(f"    {s}{suffix}")
+        print()
+
+    print(f"共 {len(merged)} 个 scope。标注「需管理员审批」的可跳过，对应功能暂不可用。")
+    print()
+    print("提示：可以一次性全选开通，OAuth 授权时会自动获取所有已开通的权限。")
+
+
 def main():
     json_only = "--json" in sys.argv
     fix_mode = "--fix" in sys.argv
+    suggest_scopes = "--suggest-scopes" in sys.argv
+
+    if suggest_scopes:
+        print_suggest_scopes()
+        return
+
     report = run_all_checks()
 
     if fix_mode:

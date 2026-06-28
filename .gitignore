@@ -2,6 +2,21 @@
 __pycache__/
 *.py[cod]
 
+# 编辑器 / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python 版本管理
+.python-version
+.tool-versions
+
+# 开发/维护侧文档（AI 工作指引、项目背景与清理记录，正式分发不需要）
+CLAUDE.md
+BACKGROUND.md
+
 config/credentials.json
 downloads/
 test_downloads/
