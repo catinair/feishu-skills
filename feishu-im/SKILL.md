@@ -14,19 +14,21 @@ metadata:
 
 ## 权限要求
 
-| 脚本 | 所需权限 | 状态 |
-|------|---------|------|
-| im_send_message.py | `im:message:send_as_bot` | 需要确认 |
-| im_list_chats.py | `im:chat:readonly` | 需要确认 |
-| im_create_chat.py | `im:chat` | 需要确认 |
-| im_upload_image.py | `im:resource` | 需要确认 |
-| im_chat_info.py | `im:chat:readonly` | 需要确认 |
-| im_chat_members.py | `im:chat:readonly` 或 `im:chat.members:read` | 需要确认 |
-| im_chat_add_members.py | `im:chat:member:operate` 或 `im:chat` | 需确认 |
-| im_chat_update.py | `im:chat` | 需要确认 |
-| im_messages_search.py | `search:message` / `contact:user.basic_profile:readonly` | **需要管理员审批** |
-| im_messages_list.py | `im:message:readonly` | 需要确认 |
-| im_messages_reply.py | `im:message` | 需要确认 |
+> **说明**：以下标注的审批要求基于常见企业配置。实际是否需要管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
+
+| 脚本 | 所需权限 | 审批说明 |
+|------|---------|----------|
+| im_send_message.py | `im:message:send_as_bot` | 一般无需管理员审批 |
+| im_list_chats.py | `im:chat:readonly` | 一般无需管理员审批 |
+| im_create_chat.py | `im:chat` | 一般无需管理员审批 |
+| im_upload_image.py | `im:resource` | 一般无需管理员审批 |
+| im_chat_info.py | `im:chat:readonly` | 一般无需管理员审批 |
+| im_chat_members.py | `im:chat:readonly` 或 `im:chat.members:read` | 一般无需管理员审批 |
+| im_chat_add_members.py | `im:chat:member:operate` 或 `im:chat` | 一般无需管理员审批 |
+| im_chat_update.py | `im:chat` | 一般无需管理员审批 |
+| im_messages_search.py | `search:message` / `contact:user.basic_profile:readonly` | 通常需管理员审批 |
+| im_messages_list.py | `im:message:readonly` | 一般无需管理员审批 |
+| im_messages_reply.py | `im:message` | 一般无需管理员审批 |
 
 ## 快捷命令
 

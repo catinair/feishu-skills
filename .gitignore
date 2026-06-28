@@ -16,6 +16,7 @@ __pycache__/
 # 开发/维护侧文档（AI 工作指引、项目背景与清理记录，正式分发不需要）
 CLAUDE.md
 BACKGROUND.md
+AGENTS.md
 
 config/credentials.json
 downloads/

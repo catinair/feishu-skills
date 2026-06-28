@@ -22,11 +22,13 @@ metadata:
 
 ## 权限要求
 
-| 脚本 | 所需权限 | 状态 |
-|------|---------|------|
-| perm_doc_list.py | `drive:drive` 或 `docs:document` 相关权限 | 需确认 |
-| perm_doc_share.py | `drive:drive` 或 `docs:document` 相关权限 | 需确认 |
-| perm_doc_remove.py | `drive:drive` 或 `docs:document` 相关权限 | 需确认 |
+> **说明**：以下标注的审批要求基于常见企业配置。实际是否需要管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
+
+| 脚本 | 所需权限 | 审批说明 |
+|------|---------|----------|
+| perm_doc_list.py | `drive:drive` 或 `docs:document` 相关权限 | 通常需管理员审批 |
+| perm_doc_share.py | `drive:drive` 或 `docs:document` 相关权限 | 通常需管理员审批 |
+| perm_doc_remove.py | `drive:drive` 或 `docs:document` 相关权限 | 通常需管理员审批 |
 
 ## 快捷命令
 

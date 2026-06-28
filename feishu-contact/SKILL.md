@@ -16,11 +16,13 @@ metadata:
 
 ## 权限要求
 
-| 脚本 | 所需权限 | 状态 |
-|------|---------|------|
-| contact_search.py | `contact:user.base:readonly` | 需确认 |
-| contact_get.py | `contact:user.base:readonly` | 需确认 |
-| contact_departments.py | `contact:department.base:readonly` + `contact:user.base:readonly`（--members） | 需确认 |
+> **说明**：以下标注的审批要求基于常见企业配置。实际是否需要管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
+
+| 脚本 | 所需权限 | 审批说明 |
+|------|---------|----------|
+| contact_search.py | `contact:user.base:readonly` | 一般无需管理员审批 |
+| contact_get.py | `contact:user.base:readonly` | 一般无需管理员审批 |
+| contact_departments.py | `contact:department.base:readonly` + `contact:user.base:readonly`（--members） | 一般无需管理员审批 |
 
 > 当前项目已切到 `user-first`，通讯录接口默认通过 `user_access_token` 调用。若 token 过期，请执行 `python3 feishu-auth/auth_get_user_token.py` 刷新。
 

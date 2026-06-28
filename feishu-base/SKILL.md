@@ -58,52 +58,54 @@ metadata:
 
 ## 权限要求
 
-| 脚本 | 所需权限 | 状态 |
+> **说明**：以下标注的审批要求基于常见企业配置。实际是否通常需管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
+
+| 脚本 | 所需权限 | 审批说明 |
 |------|---------|------|
-| base_create.py | `base:app:create` | 需要确认 |
-| base_get.py | `base:app:read` | 需要确认 |
-| base_copy.py | `base:app:create` | 需要确认 |
-| base_tables.py | `base:field:read` | 需要确认 |
-| base_table_create.py | `base:table:create` | 需要确认 |
-| base_table_delete.py | `base:table:delete` | 需要确认 |
-| base_fields.py | `base:field:read` | 需要确认 |
-| base_views.py | `base:view:read` | 需要确认 |
-| base_query.py | `base:record:read` | 需要确认 |
-| base_append.py | `base:record:create` | 需要确认 |
-| base_update.py | `base:record:update` | 需要确认 |
-| base_delete.py | `base:record:delete` | 需要确认 |
-| base_batch_update.py | `base:record:update` | 需要确认 |
-| base_batch_delete.py | `base:record:delete` | 需要确认 |
-| base_record_get.py | `base:record:read` | 需要确认 |
-| base_batch_create.py | `base:record:create` | 需要确认 |
-| base_table_get.py | `base:table:read` | 需要确认 |
-| base_table_update.py | `base:table:write_only` | **需要管理员审批** |
-| base_field_create.py | `base:field:create` | **需要管理员审批** |
-| base_field_delete.py | `base:field:delete` | **需要管理员审批** |
-| base_field_update.py | `base:field:update` | **需要管理员审批** |
-| base_field_get.py | `base:field:read` | 需要确认 |
-| base_view_create.py | `base:view:write_only` | **需要管理员审批** |
-| base_view_delete.py | `base:view:write_only` | **需要管理员审批** |
-| base_view_rename.py | `base:view:write_only` | **需要管理员审批** |
-| base_record_search.py | `base:record:read` | 需要确认 |
-| base_record_upsert.py | `base:record:create` / `base:record:update` | 需要确认 |
-| base_record_upload_attachment.py | `base:record:update` / `drive:file` | 需要确认 |
-| base_view_get.py | `base:view:read` | 需要确认 |
-| base_view_filter_get.py | `base:view:read` | **需要管理员审批** |
-| base_view_filter_set.py | `base:view:write_only` | **需要管理员审批** |
-| base_view_sort_get.py | `base:view:read` | **需要管理员审批** |
-| base_view_sort_set.py | `base:view:write_only` | **需要管理员审批** |
-| base_view_group_get.py | `base:view:read` | **需要管理员审批** |
-| base_view_group_set.py | `base:view:write_only` | **需要管理员审批** |
-| base_view_visible_fields_get.py | `base:view:read` | **需要管理员审批** |
-| base_view_visible_fields_set.py | `base:view:write_only` | **需要管理员审批** |
-| base_data_query.py | `base:table:read` | **需要管理员审批** |
-| base_record_history_list.py | `base:history:read` | **需要管理员审批** |
-| base_field_search_options.py | `base:field:read` | **需要管理员审批** |
+| base_create.py | `base:app:create` | 一般无需管理员审批 |
+| base_get.py | `base:app:read` | 一般无需管理员审批 |
+| base_copy.py | `base:app:create` | 一般无需管理员审批 |
+| base_tables.py | `base:field:read` | 一般无需管理员审批 |
+| base_table_create.py | `base:table:create` | 一般无需管理员审批 |
+| base_table_delete.py | `base:table:delete` | 一般无需管理员审批 |
+| base_fields.py | `base:field:read` | 一般无需管理员审批 |
+| base_views.py | `base:view:read` | 一般无需管理员审批 |
+| base_query.py | `base:record:read` | 一般无需管理员审批 |
+| base_append.py | `base:record:create` | 一般无需管理员审批 |
+| base_update.py | `base:record:update` | 一般无需管理员审批 |
+| base_delete.py | `base:record:delete` | 一般无需管理员审批 |
+| base_batch_update.py | `base:record:update` | 一般无需管理员审批 |
+| base_batch_delete.py | `base:record:delete` | 一般无需管理员审批 |
+| base_record_get.py | `base:record:read` | 一般无需管理员审批 |
+| base_batch_create.py | `base:record:create` | 一般无需管理员审批 |
+| base_table_get.py | `base:table:read` | 一般无需管理员审批 |
+| base_table_update.py | `base:table:write_only` | **通常需管理员审批** |
+| base_field_create.py | `base:field:create` | **通常需管理员审批** |
+| base_field_delete.py | `base:field:delete` | **通常需管理员审批** |
+| base_field_update.py | `base:field:update` | **通常需管理员审批** |
+| base_field_get.py | `base:field:read` | 一般无需管理员审批 |
+| base_view_create.py | `base:view:write_only` | **通常需管理员审批** |
+| base_view_delete.py | `base:view:write_only` | **通常需管理员审批** |
+| base_view_rename.py | `base:view:write_only` | **通常需管理员审批** |
+| base_record_search.py | `base:record:read` | 一般无需管理员审批 |
+| base_record_upsert.py | `base:record:create` / `base:record:update` | 一般无需管理员审批 |
+| base_record_upload_attachment.py | `base:record:update` / `drive:file` | 一般无需管理员审批 |
+| base_view_get.py | `base:view:read` | 一般无需管理员审批 |
+| base_view_filter_get.py | `base:view:read` | **通常需管理员审批** |
+| base_view_filter_set.py | `base:view:write_only` | **通常需管理员审批** |
+| base_view_sort_get.py | `base:view:read` | **通常需管理员审批** |
+| base_view_sort_set.py | `base:view:write_only` | **通常需管理员审批** |
+| base_view_group_get.py | `base:view:read` | **通常需管理员审批** |
+| base_view_group_set.py | `base:view:write_only` | **通常需管理员审批** |
+| base_view_visible_fields_get.py | `base:view:read` | **通常需管理员审批** |
+| base_view_visible_fields_set.py | `base:view:write_only` | **通常需管理员审批** |
+| base_data_query.py | `base:table:read` | **通常需管理员审批** |
+| base_record_history_list.py | `base:history:read` | **通常需管理员审批** |
+| base_field_search_options.py | `base:field:read` | **通常需管理员审批** |
 
 > **注意**：
-> - `base:table:write_only`、`base:field:create/delete/update`、`base:view:write_only` 是高级权限，当前应用可能尚未开通。如遇 403 权限错误，请在飞书开放平台申请对应权限。
-> - **Base v3 API**（`base_view_filter_get/set`、`base_view_sort_get/set`、`base_view_group_get/set`、`base_view_visible_fields_get/set`、`base_data_query`、`base_record_history_list`、`base_field_search_options`）需要 `base:base` 或更细粒度的 v3 权限。当前应用可能尚未开通，如遇 `99991672` 权限错误，请在飞书开放平台申请对应权限。
+> - `base:table:write_only`、`base:field:create/delete/update`、`base:view:write_only` 是高级权限，通常需要飞书管理员审批。如遇 403 权限错误，请在飞书开放平台申请对应权限并联系管理员审批。
+> - **Base v3 API**（`base_view_filter_get/set`、`base_view_sort_get/set`、`base_view_group_get/set`、`base_view_visible_fields_get/set`、`base_data_query`、`base_record_history_list`、`base_field_search_options`）需要 `base:base` 或更细粒度的 v3 权限，通常需要管理员审批。如遇 `99991672` 权限错误，请在飞书开放平台申请对应权限并联系管理员审批。
 
 ## 快捷命令
 
