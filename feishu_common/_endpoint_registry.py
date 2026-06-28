@@ -239,11 +239,11 @@ ENDPOINT_REGISTRY = {
     },
     "im_send_text": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message:send"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message.send_as_user"]},
     },
     "im_send_post": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message:send"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message.send_as_user"]},
     },
     "im_messages_list": {
         "identity": BOTH,
@@ -251,15 +251,15 @@ ENDPOINT_REGISTRY = {
     },
     "im_reply_message": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message:send"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message.send_as_user"]},
     },
     "im_send_file": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message:send"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message.send_as_user"]},
     },
     "im_send_image": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message:send"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message.send_as_user"]},
     },
     "upload_image": {
         "identity": APP_ONLY,
@@ -328,16 +328,16 @@ ENDPOINT_REGISTRY = {
         "scopes": {"tenant": ["contact:user.base:readonly"], "user": ["contact:user.base:readonly"]},
     },
     "contact_get_user": {
-        "identity": USER_ONLY,
-        "scopes": {"tenant": [], "user": ["contact:user.base:readonly"]},
+        "identity": BOTH,
+        "scopes": {"tenant": ["contact:contact.base:readonly"], "user": ["contact:contact.base:readonly"]},
     },
     "contact_get_self": {
         "identity": USER_ONLY,
-        "scopes": {"tenant": [], "user": ["contact:user.base:readonly"]},
+        "scopes": {"tenant": [], "user": ["auth:user.id:read"]},
     },
     "contact_colleagues": {
         "identity": USER_ONLY,
-        "scopes": {"tenant": [], "user": ["contact:user.base:readonly"]},
+        "scopes": {"tenant": [], "user": ["contact:contact.base:readonly"]},
     },
     # ── Perm ─────────────────────────────────────────────────────────
     "perm_list_members": {

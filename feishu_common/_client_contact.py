@@ -82,16 +82,18 @@ class ContactMixin:
             extra_query=extra_query, use_user_token=use_user_token,
         )
 
-    def contact_get_user(self, user_id, user_id_type="user_id"):
+    def contact_get_user(self, user_id, user_id_type="user_id", use_user_token=None):
         """获取用户详情（需要 user_access_token 才能返回姓名、邮箱等完整字段）
 
         Args:
             user_id: 用户 ID（根据 user_id_type 类型）
             user_id_type: user_id / open_id / union_id
+            use_user_token: 是否强制使用 user_access_token，None 表示由 registry 决定
         """
         return self._request(
             "GET", f"/open-apis/contact/v3/users/{user_id}",
-            query={"user_id_type": user_id_type}
+            query={"user_id_type": user_id_type},
+            use_user_token=use_user_token,
         )
 
     def contact_get_self(self):
@@ -110,9 +112,14 @@ class ContactMixin:
         me_open_id = me.get("open_id")
         if not me_open_id:
             raise RuntimeError("无法获取当前用户 open_id")
-        me_full = self.contact_get_user(me_open_id, user_id_type="open_id")
+        # 同部门查询是用户视角操作，内部子调用统一使用 user token，避免 default_identity=tenant
+        # 时 contact_get_user / find_by_department 切换到应用身份导致部门不可见。
+        me_full = self.contact_get_user(
+            me_open_id, user_id_type="open_id", use_user_token=True,
+        )
         user = me_full.get("user", me_full)
-        dept_path = user.get("department_path", [])
+        # contact_get_user 返回的 profile 不一定包含 department_path，优先从 contact_get_self 取
+        dept_path = user.get("department_path") or me.get("department_path", [])
         if not dept_path:
             return {
                 "me": user,
@@ -126,6 +133,7 @@ class ContactMixin:
         dept_name = dept_path[0].get("department_name", {}).get("name", "")
         members = self.contact_find_by_department(
             dept_id, department_id_type="open_department_id", user_id_type=user_id_type,
+            use_user_token=True,
         )
         return {"department_id": dept_id, "department_name": dept_name, "me": user, "members": members}
 
