@@ -13,6 +13,9 @@ __pycache__/
 .python-version
 .tool-versions
 
+# 内部调研文档（本地保留，不对外分发）
+docs/research-*.md
+
 # 开发/维护侧文档（AI 工作指引、项目背景与清理记录，正式分发不需要）
 CLAUDE.md
 BACKGROUND.md
