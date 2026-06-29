@@ -4,7 +4,7 @@
 
 ### 1. 凭证
 
-在配置目录提供 `credentials.json`（本地开发放在 `config/`，平台环境由 resolver 自动选择 `runtime_credentials/`）：
+在配置目录提供 `credentials.json`（本地开发放在 `config/`，平台环境由 resolver 自动选择 `runtime_assets/`）：
 
 ```json
 {
@@ -72,7 +72,7 @@ python3 feishu-im/im_list_chats.py
 
 `create_client()` 的查找顺序：
 1. 环境变量 `FEISHU_CONFIG_DIR` 指定的目录（显式覆盖）
-2. 平台运行时目录 `/home/user/workspace/runtime_credentials/feishu-skills/`（当 skill 位于 `/home/user/workspace/skills/feishu-skills/` 时）
+2. 平台运行时目录 `/home/user/workspace/runtime_assets/feishu-skills/`（当 skill 位于 `/home/user/workspace/skills/feishu-skills/` 时）
 3. `<skill-root>/config/credentials.json`
 4. 环境变量 `FEISHU_APP_ID` / `FEISHU_APP_SECRET`
 
@@ -81,7 +81,7 @@ python3 feishu-im/im_list_chats.py
 在部分 Agent 平台上，skill 安装目录可能每会话重建。此时凭证与运行配置会自动写到 workspace 级的持久目录：
 
 ```text
-/home/user/workspace/runtime_credentials/feishu-skills/
+/home/user/workspace/runtime_assets/feishu-skills/
 ```
 
 本地开发或普通部署时，继续沿用 `<skill-root>/config/`。

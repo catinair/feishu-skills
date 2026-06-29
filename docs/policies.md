@@ -68,7 +68,7 @@
 使用要求：
 
 - 不回显完整 token
-- 优先通过凭证文件（resolver 自动定位，平台环境在 `runtime_credentials/`，本地在 `config/`）或运行时参数传入
+- 优先通过凭证文件（resolver 自动定位，平台环境在 `runtime_assets/`，本地在 `config/`）或运行时参数传入
 - 过期后重新获取，不在仓库中长期存放失效 token
 
 ## 维护建议

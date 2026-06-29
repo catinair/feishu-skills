@@ -64,6 +64,6 @@
 
 1. **先检查 token 和 ID**：大部分 404/资源不存在错误都是拼写问题
 2. **再检查权限**：遇到 99991672 或 112005，去飞书开放平台确认 scope 已开通并重新发布应用
-3. **清除 token 缓存**：删除运行时配置目录中的 `.token_cache.json`（平台环境在 `runtime_credentials/feishu-skills/`，本地在 `config/`）
+3. **清除 token 缓存**：删除运行时配置目录中的 `.token_cache.json`（平台环境在 `runtime_assets/feishu-skills/`，本地在 `config/`）
 4. **确认字段类型**：写入 Base 前先 `base_fields.py` 查看字段结构
 5. **查看完整错误**：CLI 会输出完整错误响应，包含飞书返回的原始错误信息

@@ -5,7 +5,7 @@ _config_loader.py -- feishu-skills 配置与策略统一加载入口
 支持本地开发与平台运行时两种模式：
 - 本地：配置存放在 <skill-root>/config/
 - 部分 Agent 平台：skill 目录可能每会话重建，配置优先存放在
-  <workspace>/runtime_credentials/<skill-name>/，实现跨会话持久化
+  <workspace>/runtime_assets/<skill-name>/，实现跨会话持久化
 
 可通过环境变量 FEISHU_CONFIG_DIR 显式覆盖配置目录。
 """
@@ -85,12 +85,39 @@ def _detect_platform_workspace():
         return None
 
 
+# 旧目录名（2026-06 之前），迁移后保留常量绑定兼容
+_LEGACY_RUNTIME_DIR_NAME = "runtime_credentials"
+_RUNTIME_DIR_NAME = "runtime_assets"
+
+
+def _migrate_legacy_runtime_dir(workspace):
+    """自动迁移旧路径 runtime_credentials -> runtime_assets。
+
+    仅当旧目录存在且新目录尚不存在时执行 os.rename() 迁移。
+    迁移失败时返回旧路径，确保已有数据不丢失。
+    """
+    legacy_dir = workspace / _LEGACY_RUNTIME_DIR_NAME / SKILL_ROOT.name
+    new_dir = workspace / _RUNTIME_DIR_NAME / SKILL_ROOT.name
+    if not legacy_dir.exists():
+        return new_dir
+    if new_dir.exists():
+        return new_dir
+    try:
+        new_dir.parent.mkdir(parents=True, exist_ok=True)
+        os.rename(str(legacy_dir), str(new_dir))
+    except OSError:
+        # 迁移失败，返回旧路径确保已有数据可读
+        return legacy_dir
+    return new_dir
+
+
 def get_runtime_config_dir():
     """返回平台运行时配置目录；非平台环境返回 None。"""
     workspace = _detect_platform_workspace()
     if not workspace:
         return None
-    return workspace / "runtime_credentials" / SKILL_ROOT.name
+    # 自动尝试迁移旧路径
+    return _migrate_legacy_runtime_dir(workspace)
 
 
 def get_config_dir(*, for_write=False):
@@ -142,12 +169,20 @@ def resolve_config_path(filename, *, for_write=False):
             return runtime_dir / filename
         return default_path
 
-    # 读操作：优先运行时文件，不存在则使用模块常量对应路径
+    # 读操作：优先运行时文件，不存在则尝试旧路径，都不存在则回退到模块常量
     runtime_dir = get_runtime_config_dir()
     if runtime_dir:
         runtime_path = runtime_dir / filename
         if runtime_path.exists():
             return runtime_path
+
+        # 迁移失败或旧路径仍有数据时，回退读取
+        workspace = _detect_platform_workspace()
+        if workspace:
+            legacy_dir = workspace / _LEGACY_RUNTIME_DIR_NAME / SKILL_ROOT.name
+            legacy_path = legacy_dir / filename
+            if legacy_path.exists():
+                return legacy_path
 
     return default_path
 
@@ -181,7 +216,7 @@ def resolve_token_cache_path(*, for_write=False):
 
     与 resolve_config_path 同一优先级：
     1. FEISHU_CONFIG_DIR 环境变量
-    2. 平台 runtime_credentials/ 目录
+    2. 平台 runtime_assets/ 目录
     3. <skill-root>/config/.token_cache.json（本地 fallback）
     """
     return resolve_config_path(".token_cache.json", for_write=for_write)

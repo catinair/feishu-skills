@@ -224,7 +224,7 @@ python3 feishu-setup/setup_check.py
 ### 检查顺序（快速版）
 
 1. **凭证 + 用户授权**（必须）：运行 `python3 feishu-setup/setup_check.py`，检查 `credentials_valid` 和 `user_token_ready`
-   - 缺失时：引导用户提供 appId + appSecret，通过 resolver 写入凭证文件（平台环境自动写入 `runtime_credentials/feishu-skills/`，本地写入 `config/`），然后运行 `python3 feishu-auth/auth_get_user_token.py` 完成 OAuth 授权
+   - 缺失时：引导用户提供 appId + appSecret，通过 resolver 写入凭证文件（平台环境自动写入 `runtime_assets/feishu-skills/`，本地写入 `config/`），然后运行 `python3 feishu-auth/auth_get_user_token.py` 完成 OAuth 授权
    - OAuth 成功后自动创建 settings.json（用户信息）和 permissions.json（权限清单），无需手动维护
    - 已存在：跳过
 

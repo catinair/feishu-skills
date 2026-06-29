@@ -59,7 +59,7 @@ class TestPlatformDetection(unittest.TestCase):
             workspace = Path(tmpdir) / "workspace"
             skill_root = workspace / "skills" / "feishu-skills"
             skill_root.mkdir(parents=True)
-            runtime_dir = workspace / "runtime_credentials" / "feishu-skills"
+            runtime_dir = workspace / "runtime_assets" / "feishu-skills"
 
             original_skill_root = loader.SKILL_ROOT
             original_detect = loader._detect_platform_workspace
@@ -77,12 +77,12 @@ class TestPlatformDetection(unittest.TestCase):
                 self.assertIsNotNone(runtime)
                 self.assertEqual(runtime, runtime_dir)
 
-                # for_write=True 应自动创建 runtime_credentials 目录
+                # for_write=True 应自动创建 runtime_assets 目录
                 write_dir = loader.get_config_dir(for_write=True)
                 self.assertTrue(write_dir.exists())
                 self.assertEqual(write_dir, runtime_dir)
 
-                # 写入应落到 runtime_credentials
+                # 写入应落到 runtime_assets
                 write_path = loader.resolve_config_path("credentials.json", for_write=True)
                 self.assertEqual(write_path, runtime_dir / "credentials.json")
             finally:

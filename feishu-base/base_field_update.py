@@ -8,7 +8,7 @@ base_field_update.py -- 更新字段
 """
 import sys, os, json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from feishu_common import create_client, print_json, extract_base_info, cli_run
+from feishu_common import create_client, print_json, extract_base_info, cli_run, confirm_action_or_exit
 import argparse
 
 
@@ -20,7 +20,10 @@ def main():
     parser.add_argument("--name", default=None, help="新的字段名称")
     parser.add_argument("--type", default=None, type=int, help="字段类型编号（如 1=文本, 3=单选）")
     parser.add_argument("--property", default=None, help="字段属性 JSON")
+    parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
     args = parser.parse_args()
+
+    confirm_action_or_exit("base_field_update", f"确认更新字段 {args.field}?", yes=args.yes)
 
     app_token, table_id = extract_base_info(args.app)
     if not table_id and args.table:

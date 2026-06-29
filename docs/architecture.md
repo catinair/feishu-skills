@@ -16,7 +16,7 @@
   - `_client_core.py` — HTTP 请求、Token 获取与缓存
   - `_client.py` — 组合所有领域 mixin 的 `FeishuClient` 入口
   - `_client_xxx.py` — 各领域 API 封装（doc/drive/im/base 等）
-  - `_config_loader.py` — 统一加载配置；支持本地 `<skill-root>/config/` 与平台运行时 `/home/user/workspace/runtime_credentials/<skill-name>/` 双路径，可通过 `FEISHU_CONFIG_DIR` 显式覆盖
+  - `_config_loader.py` — 统一加载配置；支持本地 `<skill-root>/config/` 与平台运行时 `/home/user/workspace/runtime_assets/<skill-name>/` 双路径，可通过 `FEISHU_CONFIG_DIR` 显式覆盖
   - `_shared.py` — CLI 共享工具：`create_client()`、`print_json()`、`extract_doc_id()`、`extract_base_info()`、联系人查询等
   - `_docx_converter.py` — Markdown 到 docx block 的转换器
 - `feishu-*`

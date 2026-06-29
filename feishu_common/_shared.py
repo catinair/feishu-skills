@@ -11,11 +11,15 @@ import sys
 # Re-export from sub-modules to maintain backward compatibility
 from ._client import FeishuClient, DEFAULT_FOLDER_TOKEN
 from ._config_loader import (
+    allows_implicit_confirmation,
     default_credentials_path,
+    get_risk_policy_path,
     is_manual_only_action,
+    load_default_identity,
     load_user_config,
     prompt_for_confirmation,
     prompt_for_strong_confirmation,
+    requires_confirmation_for_action,
     should_confirm_action,
 )
 from ._docx_converter import BlockToMarkdownConverter, MediaExtractor
@@ -69,24 +73,61 @@ def create_client(credentials_path=None):
 def confirm_action_or_exit(action_name, message, *, yes=False, is_trusted=False, identity=None):
     """按风险策略决定是否确认，拒绝时直接退出。
 
+    当 risk_policy.json 存在时，所有决策均显式输出到 stderr，
+    提醒 AI Agent 遵守风控要求。
+
     Args:
         identity: "user" 或 "tenant"，None 时从 settings.json 读取
     """
-    if yes:
-        # --yes 视为用户显式确认；但 manual_only 操作仍打印风险警告留痕
-        if is_manual_only_action(action_name):
-            print(f"警告: {action_name} 是手动优先操作，已通过 --yes 显式确认执行。", file=sys.stderr)
+    if identity is None:
+        identity = load_default_identity()
+
+    policy_path = get_risk_policy_path()
+
+    # user 模式 + 无 risk_policy.json：用户自身权限即信任边界，静默放行
+    if identity == "user" and not policy_path.exists():
         return
 
-    if not should_confirm_action(action_name, is_trusted=is_trusted, identity=identity):
-        return
+    # ── 显式输出风控决策（有 risk_policy.json 时必定输出）──
 
-    # manual_only 操作使用强确认（要求输入 YES），普通操作使用 y/yes
+    # manual_only：最高优先级——建议引导用户在飞书界面完成
     if is_manual_only_action(action_name):
+        if yes:
+            print(f"[风控] {action_name}: 手动优先操作，已通过 --yes 显式确认执行", file=sys.stderr)
+            return
+        print(f"[风控] {action_name}: 手动优先操作（manual_only），建议引导用户在飞书界面完成", file=sys.stderr)
         confirmed = prompt_for_strong_confirmation(message)
-    else:
-        confirmed = prompt_for_confirmation(message)
+        if not confirmed:
+            print("已取消。", file=sys.stderr)
+            sys.exit(0)
+        return
 
+    # always_confirm：策略要求始终确认
+    if requires_confirmation_for_action(action_name):
+        if yes:
+            print(f"[风控] {action_name}: 策略要求 always_confirm，已通过 --yes 确认执行", file=sys.stderr)
+            return
+        print(f"[风控] {action_name}: 策略要求 always_confirm，需要用户确认", file=sys.stderr)
+        confirmed = prompt_for_confirmation(message)
+        if not confirmed:
+            print("已取消。", file=sys.stderr)
+            sys.exit(0)
+        return
+
+    # allow_without_confirmation：免确认，但显式告知决策依据
+    if allows_implicit_confirmation(action_name, is_trusted=is_trusted):
+        if is_trusted:
+            print(f"[风控] {action_name} → 信任目标: 免确认执行", file=sys.stderr)
+        else:
+            print(f"[风控] {action_name}: 免确认执行（allow_without_confirmation）", file=sys.stderr)
+        return
+
+    # 未命中任何策略：默认需确认
+    if yes:
+        print(f"[风控] {action_name}: 已通过 --yes 确认执行", file=sys.stderr)
+        return
+    print(f"[风控] {action_name}: 未在免确认列表中，需要用户确认", file=sys.stderr)
+    confirmed = prompt_for_confirmation(message)
     if not confirmed:
         print("已取消。", file=sys.stderr)
         sys.exit(0)

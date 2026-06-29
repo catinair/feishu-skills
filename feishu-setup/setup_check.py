@@ -437,7 +437,7 @@ def _config_dir_source():
     if FEISHU_CONFIG_DIR_ENV in os.environ:
         return "env"
     if get_runtime_config_dir():
-        return "runtime_credentials"
+        return "runtime_assets"
     return "skill_root"
 
 
