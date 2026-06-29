@@ -13,7 +13,7 @@
 适用于可访问飞书开放平台的网络环境，且本地有 Git 工具。
 
 ```bash
-git clone https://github.com/your-org/feishu-skills.git
+git clone https://github.com/catinair/feishu-skills.git
 cd feishu-skills
 ```
 
@@ -29,7 +29,7 @@ cd feishu-skills && git pull
 
 适用于无法使用 Git 的场景。
 
-1. 打开仓库页面：https://github.com/your-org/feishu-skills
+1. 打开仓库页面：https://github.com/catinair/feishu-skills
 2. 点击 **Code** → **Download ZIP**，下载源码包
 3. 解压到本地目录
 
