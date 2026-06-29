@@ -4,6 +4,8 @@
 
 ## 为什么选择本项目？
 
+![项目介绍](项目介绍.png)
+
 ### 起点：一次尴尬的权限审核
 
 我第一次用飞书官方 CLI（[lark-cli](https://github.com/larksuite/cli)）时，走了它的快速配置路径——创建应用、授权、发版全自动完成。我点完确定才发现，它替我申请了一大批高敏权限，直接把发版请求送到了公司管理员那里。
@@ -29,6 +31,7 @@
 | **精确 scope 控制** | 支持 `--minimal`（仅 `offline_access`）和 `--scope`（手动指定） |
 | **预检诊断** | 调用前检查权限，缺失时给出**具体 scope 名称**和审批指引，而非通用 403 |
 | **脚本自律** | `risk_policy.json` 控制写操作确认策略，可配置信任文件夹/用户/群聊，防止 AI Agent 误操作 |
+| **云端 Agent 兼容** | OAuth 授权链接可跨环境传递：云端 Agent 输出授权 URL → 用户在本地浏览器授权 → 复制回调 URL 或授权 code 回 Agent 完成换 token |
 | **零依赖** | 纯 Python 标准库（≥3.9），Pillow 仅作为画板图片裁剪的可选依赖 |
 
 ## 快速开始
@@ -110,12 +113,13 @@ export FEISHU_CONFIG_DIR=/path/to/custom/config
 | 维度 | lark-cli（官方） | feishu-skills（本项目） |
 |------|-----------------|----------------------|
 | **产品定位** | 一站式官方 CLI，200+ 命令、26 个 Agent Skills | 权限最小化优先的脚本集，124 个脚本 |
-| **语言/依赖** | Go（`npx` / 源码安装） | Python 标准库，脚本直跑 |
+| **语言/依赖** | npm/npx 安装；源码构建需 Go | Python 标准库，脚本直跑（Python 3.9+ 几乎预装所有系统） |
 | **初始化路径** | 推荐一键配置应用（`config init --new`） | 用户自己提供 appId/appSecret，不替用户创建应用 |
 | **权限策略** | 提供 `--recommend`/`--domain`/`--scope` 筛选，快速路径偏向覆盖常用能力 | 默认最小权限（~35 个免审 scope），高敏权限默认不申请 |
 | **权限诊断** | `auth check` / scope mismatch 检查 | 调用前预检，缺失时指出具体 scope + 审批指引 |
 | **写操作保护** | strict mode / dry-run | `risk_policy.json` 脚本自律 + 信任文件夹/用户/群聊 |
-| **AI Agent 友好** | 非设计目标 | 所有输出 JSON，风控决策显式输出到 stderr |
+| **云端 Agent** | 通常需 npm/npx 安装；源码构建才需要 Go | 无需 pip/编译，拷贝脚本即可运行；OAuth 授权链接可跨环境传递（云端输出 URL → 本地授权 → 复制回调 URL 或 code 回 Agent） |
+| **AI Agent** | Agent-native，全能力封装 | Agent-friendly，偏脚本透明、JSON 输出、低权限闭环 |
 | **覆盖面** | 完整（18 个业务域，官方维护） | 覆盖常用域，但不如官方完整（个人项目） |
 
 > **简单说**：官方 lark-cli 是飞书平台的"全功能瑞士军刀"；feishu-skills 是"最小权限螺丝刀"——不去替代全量能力，而是让免审小闭环场景更快、更透明、更可控。
