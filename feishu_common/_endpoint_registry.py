@@ -27,9 +27,8 @@ ADMIN_APPROVAL_SCOPES = {
     "drive:drive",
     "drive:file",
     "drive:file:readonly",
-    # 云文档协作者管理
+    # 云文档协作者完整管理权限（只读/添加权限通常免审，不纳入预警）
     "docs:permission.member",
-    "docs:permission.member:readonly",
     # 通讯录敏感权限
     "contact:user",
     "contact:user:write",
@@ -133,7 +132,9 @@ ENDPOINT_REGISTRY = {
     },
     "create_folder": {
         "identity": BOTH,
-        "scopes": {"tenant": ["drive:file"], "user": ["space:folder:create"]},
+        # 官方文档：tenant 侧满足 drive:drive 或 space:folder:create 任一即可；
+        # space:folder:create 为免审权限，作为 tenant 默认要求。
+        "scopes": {"tenant": ["space:folder:create"], "user": ["space:folder:create"]},
     },
     # download_file, download_media, download_board use _resolve_and_get_token()
     # for identity resolution (binary streaming, can't go through _request)
@@ -148,6 +149,10 @@ ENDPOINT_REGISTRY = {
     "download_board": {
         "identity": BOTH,
         "scopes": {"tenant": ["board:whiteboard:node:read"], "user": ["board:whiteboard:node:read"]},
+    },
+    "batch_get_tmp_download_url": {
+        "identity": BOTH,
+        "scopes": {"tenant": ["drive:drive:readonly"], "user": ["drive:drive:readonly"]},
     },
     "drive_create_export_task": {
         "identity": BOTH,
@@ -512,6 +517,10 @@ ENDPOINT_REGISTRY = {
     "base_upload_attachment": {
         "identity": BOTH,
         "scopes": {"tenant": ["bitable:app", "drive:file:upload"], "user": ["bitable:app"]},
+    },
+    "base_download_attachments": {
+        "identity": BOTH,
+        "scopes": {"tenant": ["bitable:app", "drive:drive:readonly"], "user": ["bitable:app"]},
     },
     # ── Task ─────────────────────────────────────────────────────────
     "task_create": {

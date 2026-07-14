@@ -92,11 +92,11 @@ class TestBuildPermissionsPayload(unittest.TestCase):
     def test_flags_admin_approval_scopes(self):
         payload = build_permissions_payload(
             ["drive:file", "docx:document"],
-            ["docs:permission.member:readonly", "im:message"],
+            ["docs:permission.member", "im:message"],
         )
         self.assertEqual(
             sorted(payload["admin_approval_scopes"]),
-            ["docs:permission.member:readonly", "drive:file"],
+            ["docs:permission.member", "drive:file"],
         )
 
 

@@ -16,7 +16,9 @@ def main():
     parser.add_argument("--member-id", required=True, help="协作者 ID")
     parser.add_argument("--member-type", default="openid", help="协作者类型：openid/union_id/user_id/openchat/department_id（默认 openid）")
     parser.add_argument("--perm", default="view", help="权限：view/edit/full_access（默认 view）")
+    parser.add_argument("--identity", choices=["user", "tenant"], help="强制使用 user 或 tenant 身份授权")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     confirm_action_or_exit(
@@ -26,7 +28,14 @@ def main():
     )
 
     client = create_client()
-    result = client.perm_add_member(args.token, args.type, args.member_id, args.member_type, args.perm)
+    use_user_token = {"user": True, "tenant": False}.get(args.identity) if args.identity else None
+    result = client.perm_add_member(
+        args.token, args.type, args.member_id, args.member_type, args.perm,
+        use_user_token=use_user_token,
+    )
+    if args.raw:
+        print_json(result)
+        return
     print_json(result)
 
 

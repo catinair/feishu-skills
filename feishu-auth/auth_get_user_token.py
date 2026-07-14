@@ -59,6 +59,7 @@ from feishu_common._config_loader import (
     get_config_dir,
     safe_write_json,
     load_credentials_data,
+    load_permissions_config,
 )
 
 # OAuth scope 名称修正：飞书权限管理页面的名称与 OAuth scope 不总是一致
@@ -66,9 +67,18 @@ _SCOPE_FIXES = {
     "im:message.send_as_user": "im:message",
 }
 
-# Fallback 推荐 scopes：当无法从应用已开通权限推导时使用。
-# 正常流程下，授权请求的 user scope 应基于 permissions.json 中已开通的 tenant scopes
-# 从 endpoint registry 自动推导，而不是使用此硬编码列表。
+# 核心 user scopes：首次 OAuth 授权或推导失败时使用的最小必要 scope 集合。
+# 这些 scope 为飞书应用基础功能所必需，无需管理员审批即可使用。
+CORE_USER_SCOPES = {
+    "offline_access",
+    "auth:user.id:read",
+    "im:message",
+    "contact:user.base:readonly",
+}
+
+# [DEPRECATED] _DEFAULT_SCOPES 已不再用于 _load_user_scopes() 的正常流程。
+# 首次 OAuth scope 策略已改为 tenant 推导 + CORE_USER_SCOPES fallback。
+# 保留此变量仅供参考：它记录了曾经推荐的全量 scope 列表。
 _DEFAULT_SCOPES = sorted({
     # 基础
     "offline_access",
@@ -134,6 +144,20 @@ _DEFAULT_SCOPES = sorted({
 })
 
 
+def _warn_admin_approval_scopes(scopes):
+    """若 scopes 包含可能需要管理员审批的权限，向 stderr 输出预警。"""
+    from feishu_common._endpoint_registry import ADMIN_APPROVAL_SCOPES
+    flagged = set(scopes) & ADMIN_APPROVAL_SCOPES
+    if not flagged:
+        return
+    print("=" * 60, file=sys.stderr)
+    print("授权链接包含以下可能需要管理员审批的 scope:", file=sys.stderr)
+    for s in sorted(flagged):
+        print(f"  - {s}", file=sys.stderr)
+    print("若授权后仍无法使用，请联系管理员审批并重新发布应用。", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
+
+
 def _derive_user_scopes_from_tenant_scopes(tenant_scopes):
     """根据应用已开通的 tenant scopes，从 endpoint registry 推导需要的 user scopes。
 
@@ -157,50 +181,57 @@ def _derive_user_scopes_from_tenant_scopes(tenant_scopes):
     return sorted(user_scopes)
 
 
-def _load_tenant_scopes():
-    """从 permissions.json 读取已同步的 tenant scopes。"""
-    path = resolve_config_path("permissions.json")
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return []
-    return list(data.get("scopes", {}).get("tenant", []))
-
-
 def _load_user_scopes(client=None):
-    """确定 OAuth 授权时应申请的 user scopes。
+    """加载 user scopes，优先从应用已开通 tenant scopes 推导，失败回退到核心 scope。
 
-    优先根据 permissions.json 中已开通的 tenant scopes 推导对应的 user scopes。
-    如果 permissions.json 中 tenant scopes 为空且提供了 client，则尝试自动同步一次。
-    如果都无法获取，回退到 _DEFAULT_SCOPES 并给出警告。
+    策略：
+    1. 从本地 permissions.json 读取已开通 tenant scopes 并推导
+    2. 若提供了 client，在线同步 tenant scopes 并推导
+    3. 以上均失败时回退到 CORE_USER_SCOPES
+
+    Returns:
+        (scopes, source): scopes 为排序后的 scope 列表，source 为
+        "tenant_derived" 或 "core_fallback"。
     """
-    tenant_scopes = _load_tenant_scopes()
-    if not tenant_scopes and client is not None:
+    # 尝试从 permissions.json 本地推导
+    try:
+        data = load_permissions_config()
+    except (json.JSONDecodeError, OSError):
+        data = None
+
+    if data:
+        tenant_scopes = data.get("scopes", {}).get("tenant", [])
+        if tenant_scopes:
+            derived = set(_derive_user_scopes_from_tenant_scopes(tenant_scopes))
+            merged = derived | CORE_USER_SCOPES
+            fixed = set()
+            for s in merged:
+                fixed.add(_SCOPE_FIXES.get(s, s))
+            _warn_admin_approval_scopes(fixed)
+            return sorted(fixed), "tenant_derived"
+
+    # 如果有 client，尝试在线同步 tenant scopes
+    if client is not None:
         try:
             from auth_sync_permissions import fetch_tenant_scopes
             tenant_scopes = fetch_tenant_scopes(client)
-            print(f"   已自动从飞书同步应用权限（{len(tenant_scopes)} 项）用于推导 user scope", file=sys.stderr)
+            if tenant_scopes:
+                derived = set(_derive_user_scopes_from_tenant_scopes(tenant_scopes))
+                merged = derived | CORE_USER_SCOPES
+                fixed = set()
+                for s in merged:
+                    fixed.add(_SCOPE_FIXES.get(s, s))
+                _warn_admin_approval_scopes(fixed)
+                return sorted(fixed), "tenant_derived"
         except Exception as e:
-            print(f"   ⚠ 无法自动同步应用权限: {e}，将使用默认 scope 列表", file=sys.stderr)
+            print(f"   ⚠ 同步 tenant scopes 失败，将使用核心 scope: {e}", file=sys.stderr)
 
-    if tenant_scopes:
-        derived = set(_derive_user_scopes_from_tenant_scopes(tenant_scopes))
-        # 始终保留基础 scope
-        merged = derived | {"offline_access", "auth:user.id:read"}
-        # 应用 _SCOPE_FIXES 修正
-        fixed = set()
-        for s in merged:
-            fixed.add(_SCOPE_FIXES.get(s, s))
-        return sorted(fixed), "derived"
-
-    merged = set(_DEFAULT_SCOPES)
+    # 回退到核心 scope
     fixed = set()
-    for s in merged:
+    for s in CORE_USER_SCOPES:
         fixed.add(_SCOPE_FIXES.get(s, s))
-    print("   ⚠ 未找到应用已开通权限，OAuth 将使用默认 scope 列表（可能包含未开通权限）", file=sys.stderr)
-    return sorted(fixed), "fallback"
+    _warn_admin_approval_scopes(fixed)
+    return sorted(fixed), "core_fallback"
 
 
 def exchange_code_for_token(client, code, redirect_uri):
@@ -414,6 +445,10 @@ def main():
     else:
         print("   请用浏览器打开该文件中的链接并完成授权", file=sys.stderr)
     print(f"   （请求 {len(scopes)} 个 scope）", file=sys.stderr)
+    if scope_source == "tenant_derived":
+        print(f"   权限来源: 从已开通 tenant scopes 推导", file=sys.stderr)
+    elif scope_source == "core_fallback":
+        print(f"   权限来源: 核心 scope（未检测到已开通权限）", file=sys.stderr)
     if not args.auto_callback:
         print("3. 授权后，从浏览器地址栏复制完整的回调 URL", file=sys.stderr)
         print("   （包含 ?code=... 的那一串）", file=sys.stderr)
@@ -475,6 +510,9 @@ def main():
         print(f"   已记录 user scopes: {len(user_scopes)} 项。", file=sys.stderr)
 
     # Step 6: 自动拉取用户信息写入 settings.json
+    # 必须用写入新 token 后的凭证重新创建 client，否则旧 client 仍持有过期 token，
+    # 调用 API 时会触发 refresh_token 刷新逻辑，可能把刚写入的新 token 覆盖或清空。
+    client = FeishuClient(str(creds_write_path))
     _auto_populate_settings(client, creds_source_path)
 
     # Step 7: 自动同步 tenant scopes 写入 permissions.json

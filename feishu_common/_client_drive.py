@@ -102,17 +102,26 @@ class DriveMixin:
         self._request("DELETE", f"/open-apis/drive/v1/files/{file_token}", query={"type": file_type})
         return {"deleted": True, "file_token": file_token}
     
-    def create_folder(self, name, folder_token=None):
+    def create_folder(self, name, folder_token=None, use_user_token=None):
         """创建云文档文件夹
     
         Args:
             name: 文件夹名称
-            folder_token: 父文件夹 token，不传则使用默认文件夹
+            folder_token: 父文件夹 token。
+                传 None 时使用默认文件夹；传空字符串 "" 时在云空间根目录创建。
+            use_user_token: 是否使用 user_access_token，None 时由 resolver 决定
         """
         body = {"name": name}
-        if folder_token:
-            body["folder_token"] = folder_token
-        data = self._request("POST", "/open-apis/drive/v1/files/create_folder", body=body)
+        if folder_token is None:
+            folder_token = DEFAULT_FOLDER_TOKEN
+        # 空字符串表示在云空间根目录创建，必须显式下发
+        body["folder_token"] = folder_token
+        data = self._request(
+            "POST",
+            "/open-apis/drive/v1/files/create_folder",
+            body=body,
+            use_user_token=use_user_token,
+        )
         return data
     
     @staticmethod
@@ -164,12 +173,16 @@ class DriveMixin:
             f.write(resp.read())
         return str(save)
     
-    def download_media(self, media_token, save_path, progress=True):
+    def download_media(self, media_token, save_path, progress=True, extra=None):
         """下载文档媒体文件（图片、文件块等）
 
         优先尝试 /medias/ 路径，403 时回退到 /files/ 路径。
         大文件自动延长超时，支持流式下载进度打印。
+
+        Args:
+            extra: 高级权限鉴权参数（多维表格附件需要，从记录响应 url 字段提取）
         """
+        query = {"extra": extra} if extra else None
         paths = [
             f"/open-apis/drive/v1/medias/{media_token}/download",
             f"/open-apis/drive/v1/files/{media_token}/download",
@@ -179,7 +192,7 @@ class DriveMixin:
         total_size = 0
         for path in paths:
             try:
-                head_resp = self._request_raw("HEAD", path)
+                head_resp = self._request_raw("HEAD", path, query=query)
                 total_size = int(head_resp.headers.get("Content-Length", 0))
                 break
             except RuntimeError as e:
@@ -197,7 +210,7 @@ class DriveMixin:
         resp = None
         for path in paths:
             try:
-                resp = self._request_raw("GET", path)
+                resp = self._request_raw("GET", path, query=query)
                 break
             except RuntimeError as e:
                 last_error = e
@@ -253,7 +266,26 @@ class DriveMixin:
         if progress:
             print("  done", file=sys.stderr)
         return str(save)
-    
+
+    def batch_get_tmp_download_url(self, file_tokens, extra=None):
+        """批量获取素材临时下载链接（24 小时有效）
+
+        适用于需要临时 URL 而非直接下载二进制流的场景。
+
+        Args:
+            file_tokens: file_token 列表
+            extra: 高级权限鉴权参数
+        Returns:
+            {"tmp_download_urls": [{"file_token": "...", "tmp_download_url": "..."}]}
+        """
+        query = {"file_tokens": ",".join(file_tokens)}
+        if extra:
+            query["extra"] = extra
+        return self._request(
+            "GET", "/open-apis/drive/v1/medias/batch_get_tmp_download_url",
+            query=query,
+        )
+
     def download_board(self, board_token, save_path, progress=True):
         """下载画板（board/whiteboard）为图片
 

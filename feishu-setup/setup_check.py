@@ -21,6 +21,8 @@ from feishu_common import write_default_risk_policy, load_default_identity
 from feishu_common._config_loader import (
     resolve_config_path,
     get_config_dir,
+    get_config_context,
+    load_credentials_data,
     get_runtime_config_dir,
 )
 from feishu_common._endpoint_registry import ENDPOINT_REGISTRY, ADMIN_APPROVAL_SCOPES
@@ -179,7 +181,7 @@ def check_settings():
 
 
 def check_user_token():
-    """user_access_token 存在、未过期、scope 检测"""
+    """user_access_token 存在、未过期、scope 检测；token 过期时只输出 next_command，不自动刷新。"""
     path = resolve_config_path("credentials.json")
     result = {
         "user_token_ready": False,
@@ -188,14 +190,17 @@ def check_user_token():
         "user_token_scopes_sufficient": False,
         "user_token_scopes_recommended": False,
         "oauth_version": "unknown",
+        "has_refresh_token": False,
+        "refresh_token_expired": None,
+        "next_command": None,
     }
 
-    if not path.exists():
-        result["user_token_detail"] = f"凭证文件不存在: {path}"
-        return result
-
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data, _ = load_credentials_data()
+    except RuntimeError:
+        result["user_token_detail"] = f"凭证文件不存在: {path}"
+        result["next_command"] = "配置应用凭证（appId + appSecret）"
+        return result
     except (json.JSONDecodeError, OSError) as e:
         result["user_token_detail"] = f"文件解析失败: {e}"
         return result
@@ -203,23 +208,33 @@ def check_user_token():
     token = data.get("userAccessToken", "") or data.get("user_access_token", "")
     if not token:
         result["user_token_detail"] = "user_access_token 未配置"
+        result["next_command"] = "python3 feishu-auth/auth_get_user_token.py --print-auth-url --json"
         return result
 
     # OAuth 版本检测：v2 token 通常是长 JWT（>500 字符）
     result["oauth_version"] = "v2" if len(token) > 500 else "v1"
 
-    # 过期检测
+    # 刷新 token 状态（无论是否过期都显示）
     expire = data.get("userTokenExpire", 0)
     now = time.time()
+    refresh_expire = data.get("refreshTokenExpire", 0)
+    result["has_refresh_token"] = bool(data.get("refreshToken", ""))
+    result["refresh_token_expired"] = refresh_expire > 0 and now > refresh_expire
+
     if expire > 0 and now > expire:
         result["user_token_expired"] = True
         result["user_token_ready"] = False
-        result["user_token_detail"] = f"user_access_token 已过期（过期于 {int(now - expire)} 秒前）"
-        # 检查 refresh_token
-        refresh_expire = data.get("refreshTokenExpire", 0)
-        has_refresh = bool(data.get("refreshToken", ""))
-        result["has_refresh_token"] = has_refresh
-        result["refresh_token_expired"] = refresh_expire > 0 and now > refresh_expire
+
+        # refresh_token 有效 -> 给出刷新命令，由业务脚本/_ensure_user_token() 单一入口刷新
+        if result["has_refresh_token"] and not result["refresh_token_expired"]:
+            result["user_token_detail"] = "user_access_token 已过期，refresh_token 有效，由业务脚本自动刷新"
+            result["next_command"] = "python3 feishu-auth/auth_diagnose_token.py --refresh"
+            return result
+
+        # refresh_token 无效 或 刷新失败 -> 给出精确重新授权命令
+        result["next_command"] = "python3 feishu-auth/auth_get_user_token.py --print-auth-url --json"
+        if "user_token_detail" not in result:
+            result["user_token_detail"] = f"user_access_token 已过期（{int(now - expire)} 秒前），refresh_token 无效或刷新失败"
         return result
 
     result["user_token_expired"] = False
@@ -348,10 +363,11 @@ def check_risk_policy(identity="user"):
 
 
 def run_all_checks():
-    """运行所有检测，返回完整状态报告"""
+    """运行所有检测，返回完整状态报告。setup_check 不触发 token 刷新。"""
+    ctx = get_config_context()
     report = {
-        "config_dir": str(get_config_dir()),
-        "config_dir_source": _config_dir_source(),
+        "config_dir": str(ctx["config_dir"]),
+        "config_dir_source": ctx["source"],
     }
 
     # 先读取 default_identity，用于决定 risk_policy 是否必填
@@ -397,8 +413,14 @@ def run_all_checks():
         missing.append("settings")
     if not report.get("user_token_ready"):
         missing.append("user_token")
-        if report.get("user_token_expired") and not report.get("has_refresh_token"):
-            recommendations.append("重新运行 OAuth 授权流程")
+        if report.get("next_command"):
+            # 优先输出精确命令
+            if report["next_command"].startswith("python3"):
+                recommendations.append(f"运行以下命令重新授权: {report['next_command']}")
+            else:
+                recommendations.append(report["next_command"])
+        elif report.get("user_token_expired") and not report.get("has_refresh_token"):
+            recommendations.append("user_access_token 已过期且没有 refresh_token，需重新授权")
         elif report.get("user_token_expired") and report.get("refresh_token_expired"):
             recommendations.append("refresh_token 已过期，需重新授权")
     if report.get("user_token_ready") and not report.get("user_token_scopes_sufficient"):
@@ -428,17 +450,6 @@ def run_all_checks():
     report["recommendations"] = recommendations
 
     return report
-
-
-def _config_dir_source():
-    """说明当前配置目录的来源，便于排查平台/本地路径问题。"""
-    from feishu_common._config_loader import FEISHU_CONFIG_DIR_ENV
-
-    if FEISHU_CONFIG_DIR_ENV in os.environ:
-        return "env"
-    if get_runtime_config_dir():
-        return "runtime_assets"
-    return "skill_root"
 
 
 def print_suggest_scopes():
@@ -571,6 +582,10 @@ def main():
         icon = "+" if status == "PASS" else "x"
         detail = report.get(detail_key, "")
         print(f"  [{icon}] {label}: {detail}")
+
+    # 显式输出下一步命令
+    if report.get("next_command"):
+        print(f"  → 下一步: {report['next_command']}")
 
     admin_warnings = report.get("admin_approval_warnings", [])
     if admin_warnings:

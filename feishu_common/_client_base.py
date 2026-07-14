@@ -369,3 +369,86 @@ class BaseMixin:
 
         # 更新记录
         return self.base_update_record(app_token, table_id, record_id, {field_name: attachments})
+
+    def base_download_attachments(self, app_token, table_id, record_id, field_name=None, output_dir="./downloads"):
+        """下载记录中的附件到本地。
+
+        自动识别附件字段，提取 file_token 和高级权限鉴权参数（extra），
+        逐附件下载并返回结果清单。
+
+        Args:
+            app_token: 多维表格 app token
+            table_id: 数据表 ID
+            record_id: 记录 ID
+            field_name: 指定字段名（可选，不传则下载所有附件字段）
+            output_dir: 输出目录
+
+        Returns:
+            {"record_id": ..., "downloaded": [...], "failed": [...], "total": N}
+        """
+        import os
+        import urllib.parse
+        from pathlib import Path
+
+        record = self.base_get_record(app_token, table_id, record_id)
+        fields = record.get("record", {}).get("fields", {})
+        if not fields:
+            raise RuntimeError(f"Record {record_id} has no fields")
+
+        output = Path(output_dir)
+        output.mkdir(parents=True, exist_ok=True)
+
+        downloaded = []
+        failed = []
+
+        for fname, fvalue in fields.items():
+            # 如果指定了字段名，只处理该字段
+            if field_name and fname != field_name:
+                continue
+
+            # 附件字段的值是列表 [{file_token, name, url, ...}]
+            if not isinstance(fvalue, list):
+                continue
+            for item in fvalue:
+                if not isinstance(item, dict):
+                    continue
+                file_token = item.get("file_token")
+                attachment_name = item.get("name", file_token)
+                if not file_token:
+                    continue
+
+                # 从 url 字段解析 extra 鉴权参数
+                extra = None
+                url_str = item.get("url", "")
+                if url_str:
+                    parsed = urllib.parse.urlparse(url_str)
+                    qs = urllib.parse.parse_qs(parsed.query)
+                    extra = qs.get("extra", [None])[0]
+
+                try:
+                    saved = self.download_media(
+                        file_token, str(output), progress=True, extra=extra,
+                    )
+                    downloaded.append({
+                        "file_token": file_token,
+                        "name": attachment_name,
+                        "saved_path": saved,
+                    })
+                except Exception as e:
+                    failed.append({
+                        "file_token": file_token,
+                        "name": attachment_name,
+                        "error": str(e),
+                    })
+
+        if not downloaded and not failed and field_name:
+            raise RuntimeError(
+                f"No attachment field '{field_name}' found in record {record_id}"
+            )
+
+        return {
+            "record_id": record_id,
+            "downloaded": downloaded,
+            "failed": failed,
+            "total": len(downloaded) + len(failed),
+        }

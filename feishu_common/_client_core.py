@@ -5,6 +5,7 @@ _client_core.py -- 飞书客户端核心 HTTP 与鉴权能力
 
 import json
 import os
+import random
 import sys
 import time
 import urllib.error
@@ -12,7 +13,14 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from ._config_loader import load_credentials_data, load_default_identity, load_granted_scopes, resolve_config_path, resolve_token_cache_path, safe_write_json
+from ._config_loader import (
+    load_credentials_data,
+    load_default_identity,
+    load_granted_scopes,
+    resolve_config_path,
+    resolve_token_cache_path,
+    safe_write_json,
+)
 from ._endpoint_registry import ENDPOINT_REGISTRY, APP_ONLY, USER_ONLY, ADMIN_APPROVAL_SCOPES
 
 # 常见飞书错误码中文提示
@@ -56,7 +64,7 @@ class FeishuClientCore:
         self.user_access_token = self.creds.get("userAccessToken") or self.creds.get("user_access_token")
         self._token = None
         self._token_expire = 0
-    
+
     @staticmethod
     def _load_credentials(path):
         """读取应用凭证（自动通过 resolver 定位 credentials.json）"""
@@ -77,6 +85,72 @@ class FeishuClientCore:
         """显式覆盖 user_access_token。"""
         self.user_access_token = token
 
+    # ── 诊断日志 ──────────────────────────────────────────────────
+
+    def _log_token_event(self, message):
+        """输出 token 相关诊断信息到 stderr。"""
+        print(message, file=sys.stderr)
+
+    @staticmethod
+    def _token_fingerprint(token):
+        """返回 token 的脱敏指纹，用于日志排查。"""
+        if not token or len(token) < 12:
+            return "<empty>"
+        return f"{token[:6]}...{token[-4:]}"
+
+    def _log_token_state(self, prefix):
+        """记录当前 token 状态（脱敏）。"""
+        now = time.time()
+        at = self.user_access_token or self.creds.get("user_access_token")
+        at_expire = self.creds.get("userTokenExpire", 0)
+        rt = self.creds.get("refreshToken")
+        rt_expire = self.creds.get("refreshTokenExpire", 0)
+        self._log_token_event(
+            f"{prefix}: "
+            f"AT={self._token_fingerprint(at)} "
+            f"AT_expire_in={int(at_expire - now) if at_expire else 'unknown'}s "
+            f"RT={self._token_fingerprint(rt)} "
+            f"RT_expire_in={int(rt_expire - now) if rt_expire else 'unknown'}s"
+        )
+
+    def _persist_token_history(self, event, *, old_at=None, new_at=None, old_rt=None, new_rt=None, **extra):
+        """持久化 token 事件历史到 JSONL 文件。
+
+        默认只记录 token fingerprint；设置环境变量 FEISHU_TOKEN_HISTORY_FULL=1
+        后才会写入完整 token 值（仅用于极端调试场景，注意文件安全）。
+        历史记录失败不应影响主流程。
+        """
+        try:
+            from ._config_loader import append_token_history
+        except Exception:
+            return
+
+        def _mask(token):
+            if not token:
+                return ""
+            if os.environ.get("FEISHU_TOKEN_HISTORY_FULL") == "1":
+                return str(token)
+            return self._token_fingerprint(token)
+
+        record = {
+            "ts": time.time(),
+            "pid": os.getpid(),
+            "event": event,
+            "app_id": self.app_id,
+            "old_at_fp": _mask(old_at),
+            "new_at_fp": _mask(new_at),
+            "old_rt_fp": _mask(old_rt),
+            "new_rt_fp": _mask(new_rt),
+            "source_path": self.creds.get("_source_path", ""),
+        }
+        record.update(extra)
+        try:
+            append_token_history(record)
+        except Exception:
+            pass
+
+    # ── Token 持久化 ──────────────────────────────────────────────
+
     def _save_user_token(self, access_token, refresh_token, expires_in, refresh_expires_in, scopes=None):
         """保存 user_access_token 及其过期时间到 credentials.json。
 
@@ -96,20 +170,36 @@ class FeishuClientCore:
             source_path = self.creds.get("_source_path")
             creds_write_path = Path(source_path) if source_path else resolve_config_path("credentials.json", for_write=True)
 
+        self._log_token_event(
+            f"save_token: writing to {creds_write_path} "
+            f"(platform_active={platform_active}, env_override={env_override})"
+        )
+
         # 优先从写入目标读取现有凭证，不存在则回退到读取来源
         try:
             with open(creds_write_path, "r", encoding="utf-8") as f:
                 creds = json.load(f)
+            self._log_token_event(f"save_token: read existing creds from {creds_write_path}")
         except Exception:
             source_path = self.creds.get("_source_path")
             if source_path and Path(source_path) != creds_write_path:
                 try:
                     with open(source_path, "r", encoding="utf-8") as f:
                         creds = json.load(f)
+                    self._log_token_event(f"save_token: read existing creds from source {source_path}")
                 except Exception:
                     creds = dict(self.creds)
+                    self._log_token_event("save_token: using in-memory creds as fallback")
             else:
                 creds = dict(self.creds)
+                self._log_token_event("save_token: using in-memory creds as fallback")
+
+        old_at = creds.get("userAccessToken", "")
+        old_rt = creds.get("refreshToken", "")
+        self._log_token_event(
+            f"save_token: before write AT={self._token_fingerprint(old_at)} "
+            f"RT={self._token_fingerprint(old_rt)}"
+        )
 
         now = time.time()
         creds["userAccessToken"] = access_token
@@ -117,31 +207,176 @@ class FeishuClientCore:
         if refresh_token:
             creds["refreshToken"] = refresh_token
             creds["refreshTokenExpire"] = now + refresh_expires_in
+        else:
+            # 调用方明确传入空 refresh_token：一旦 refresh API 返回了新 AT，
+            # 旧 RT 通常已被消耗。保留旧 RT 会导致下次刷新用失效 token 继续失败。
+            # 清空 RT 让下次 _ensure_user_token() 直接提示重新授权。
+            self._log_token_event(
+                "save_token: warning, refresh_token is empty, clearing stored RT "
+                "(old RT may have been consumed by Feishu)"
+            )
+            creds["refreshToken"] = ""
+            creds.pop("refreshTokenExpire", None)
         if scopes is not None:
             creds["userScopes"] = sorted(set(scopes))
         # 移除内部字段
         creds.pop("_source_path", None)
 
         safe_write_json(creds_write_path, creds, mode=0o600)
+        self._log_token_event(
+            f"save_token: wrote AT={self._token_fingerprint(access_token)} "
+            f"RT={self._token_fingerprint(refresh_token)} to {creds_write_path}"
+        )
+
+        # 写入后验证：重新读取文件确认 AT 已写入
+        try:
+            with open(creds_write_path, "r", encoding="utf-8") as f:
+                verify = json.load(f)
+            verify_at = verify.get("userAccessToken", "")
+            if verify_at != access_token:
+                raise RuntimeError(
+                    f"token save verification failed: disk AT={self._token_fingerprint(verify_at)} "
+                    f"!= expected AT={self._token_fingerprint(access_token)}"
+                )
+            self._log_token_event("save_token: verification passed")
+        except Exception as e:
+            self._log_token_event(f"save_token: verification failed: {e}")
+            raise
 
         self.user_access_token = access_token
         self.creds["userAccessToken"] = access_token
         self.creds["userTokenExpire"] = now + expires_in
         if refresh_token:
             self.creds["refreshToken"] = refresh_token
+            self.creds["refreshTokenExpire"] = now + refresh_expires_in
+        else:
+            self.creds["refreshToken"] = ""
+            self.creds.pop("refreshTokenExpire", None)
         if scopes is not None:
             self.creds["userScopes"] = sorted(set(scopes))
 
+    # ── 磁盘重载（竞态修复）───────────────────────────────────────
+
+    def _reload_user_token_from_disk(self):
+        """刷新失败后重读凭证文件，兜底并发刷新或跨进程更新。"""
+        from ._config_loader import FEISHU_CONFIG_DIR_ENV, get_runtime_config_dir
+
+        candidate_paths = []
+        platform_active = get_runtime_config_dir() is not None
+        env_override = bool(os.environ.get(FEISHU_CONFIG_DIR_ENV))
+
+        source_path = self.creds.get("_source_path")
+        if platform_active or env_override:
+            # 平台/env 覆盖模式下，先检查 canonical 路径，再检查 fallback 来源
+            candidate_paths.append(resolve_config_path("credentials.json"))
+            if source_path:
+                candidate_paths.append(Path(source_path))
+        else:
+            # 本地模式下，source_path 就是当前使用的凭证文件路径，只检查它。
+            # 避免测试或本地多进程场景下误读到其他位置（如项目根目录）的旧 token。
+            if source_path:
+                candidate_paths.append(Path(source_path))
+            else:
+                candidate_paths.append(resolve_config_path("credentials.json"))
+
+        now = time.time()
+        seen = set()
+        for path in candidate_paths:
+            if not path:
+                continue
+            path = Path(path)
+            path_key = str(path)
+            if path_key in seen or not path.exists():
+                continue
+            seen.add(path_key)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    creds = json.load(f)
+            except Exception:
+                continue
+
+            disk_token = creds.get("userAccessToken") or creds.get("user_access_token")
+            disk_expire = creds.get("userTokenExpire", 0)
+            # 提前 30 分钟认为 token 有效，减少多个进程同时触发刷新的概率
+            if disk_token and (not disk_expire or now < disk_expire - 1800):
+                creds["_source_path"] = str(path)
+                self.creds.update(creds)
+                self.user_access_token = disk_token
+                self._log_token_event(f"user token reloaded from disk: {path}")
+                return disk_token
+        return None
+
+    # ── Token 刷新 ────────────────────────────────────────────────
+
+    def _parse_error_body(self, body):
+        """尝试解析飞书错误响应体，返回可读取的 dict。"""
+        if not body:
+            return None
+        try:
+            return json.loads(body)
+        except Exception:
+            return None
+
+    def _retry_refresh_after_failure(self):
+        """刷新失败后尝试从磁盘重新加载并再次刷新（竞态兜底）。"""
+        pid = os.getpid()
+        self._log_token_event(f"refresh: pid={pid} attempting to recover from disk after failure")
+
+        # 最多尝试 3 次，带随机抖动，避免多个失败进程同时醒来再次竞争
+        for attempt in range(1, 4):
+            reloaded = self._reload_user_token_from_disk()
+            if reloaded:
+                self._log_token_event(
+                    f"refresh: pid={pid} recovered via disk reload on attempt {attempt}"
+                )
+                return reloaded
+
+            if attempt < 3:
+                wait = 1.0 + random.random() * 2.0  # 1.0 ~ 3.0 秒
+                self._log_token_event(
+                    f"refresh: pid={pid} no valid token on disk, waiting {wait:.2f}s (attempt {attempt}/3)"
+                )
+                time.sleep(wait)
+
+        self._log_token_event(f"refresh: pid={pid} recovery failed, no valid token found on disk after 3 attempts")
+        return None
+
     def _refresh_user_token(self):
         """用 refresh_token 刷新 user_access_token。成功返回新 token，失败返回 None。"""
+        pid = os.getpid()
+        self._log_token_event(f"refresh: pid={pid}")
+        self._log_token_state("refresh")
+
+        # 刷新前先从磁盘读取最新凭证，减少多进程竞态：
+        # 如果其他进程已经刷新过，磁盘上的 AT 可能已有效，直接用新的；
+        # 即使 AT 仍过期，磁盘上的 RT 也可能已被更新为最新值。
+        source_path = self.creds.get("_source_path")
+        if source_path:
+            self._log_token_event(f"refresh: reloading credentials from {source_path} before API call")
+            reloaded_at = self._reload_user_token_from_disk()
+            if reloaded_at:
+                self._log_token_event(
+                    f"refresh: disk has valid AT={self._token_fingerprint(reloaded_at)}, skipping API call"
+                )
+                return reloaded_at
+            self._log_token_state("refresh after reload")
+        else:
+            self._log_token_event("refresh: no _source_path, skipping pre-reload from disk")
+
         refresh_token = self.creds.get("refreshToken")
         if not refresh_token:
+            self._log_token_event("refresh: no refresh_token available")
             return None
 
         # 检查 refresh_token 是否过期（0 表示未知有效期，仍尝试刷新）
         refresh_expire = self.creds.get("refreshTokenExpire", 0)
         if refresh_expire > 0 and time.time() > refresh_expire:
+            self._log_token_event(f"refresh: refresh_token expired {int(time.time() - refresh_expire)}s ago")
             return None
+
+        self._log_token_event(
+            f"refresh: pid={pid} calling Feishu API with RT={self._token_fingerprint(refresh_token)}"
+        )
 
         url = f"{self.base_url}/open-apis/authen/v2/oauth/token"
         body = json.dumps({
@@ -153,26 +388,75 @@ class FeishuClientCore:
         req = urllib.request.Request(url, data=body, headers={
             "Content-Type": "application/json",
         })
+        data = None
         try:
             resp = urllib.request.urlopen(req, timeout=DEFAULT_TIMEOUT)
             data = json.loads(resp.read().decode())
-        except Exception:
-            return None
+        except urllib.error.HTTPError as e:
+            # HTTP 4xx/5xx 时读取响应体，获取具体错误码
+            body = ""
+            try:
+                body = e.read().decode("utf-8")
+            except Exception:
+                pass
+            self._log_token_event(
+                f"user token refresh failed: HTTP {e.code} body={body}"
+            )
+            data = self._parse_error_body(body)
+        except Exception as e:
+            self._log_token_event(f"user token refresh failed: network/request error: {e}")
 
-        if data.get("code") != 0:
-            return None
+        if not data:
+            return self._retry_refresh_after_failure()
+
+        code = data.get("code")
+        msg = data.get("msg", "")
+        has_access = bool(data.get("access_token"))
+        has_refresh = bool(data.get("refresh_token"))
+        expires_in = data.get("expires_in", 7200)
+        refresh_expires_in = data.get("refresh_token_expires_in", 2592000)
+        self._log_token_event(
+            f"refresh: pid={pid} API response code={code} msg={msg} "
+            f"has_access_token={has_access} has_refresh_token={has_refresh} "
+            f"expires_in={expires_in} refresh_expires_in={refresh_expires_in}"
+        )
+
+        if code != 0:
+            self._log_token_event(f"user token refresh failed: code={code} msg={msg}")
+            return self._retry_refresh_after_failure()
 
         new_token = data.get("access_token", "")
         new_refresh = data.get("refresh_token", "")
-        expires_in = data.get("expires_in", 7200)
-        refresh_expires_in = data.get("refresh_token_expires_in", 2592000)
         scope_text = data.get("scope", "")
         scopes = [item for item in scope_text.split() if item]
 
-        if new_token:
-            self._save_user_token(new_token, new_refresh, expires_in, refresh_expires_in, scopes=scopes)
+        if not new_token:
+            self._log_token_event("user token refresh failed: response missing access_token")
+            return self._retry_refresh_after_failure()
+
+        if not new_refresh:
+            # 飞书 v2 OAuth 刷新成功后通常应返回新 RT；若缺失，可能是并发导致
+            # 另一个进程已经消耗了旧 RT 并写入了新 RT。优先从磁盘重载。
+            self._log_token_event(
+                "refresh: API returned new AT but no new RT, old RT likely consumed; "
+                "trying disk reload"
+            )
+            reloaded = self._reload_user_token_from_disk()
+            if reloaded:
+                self._log_token_event("refresh: recovered new RT from disk after API omitted it")
+                return reloaded
+
+            # 磁盘上也没有新 RT：保存新 AT，但清空 RT，避免下次用已失效的 RT
+            self._log_token_event(
+                "refresh: no new RT on disk; saving AT but clearing RT, re-authorization will be required"
+            )
+            self._save_user_token(new_token, "", expires_in, refresh_expires_in, scopes=scopes)
             return new_token
-        return None
+
+        self._save_user_token(new_token, new_refresh, expires_in, refresh_expires_in, scopes=scopes)
+        return new_token
+
+    # ── Token 获取 ────────────────────────────────────────────────
 
     def _ensure_token(self):
         """获取 tenant_access_token，支持文件缓存"""
@@ -192,9 +476,17 @@ class FeishuClientCore:
                 ):
                     self._token = cache["token"]
                     self._token_expire = cache["expire"]
+                    print(
+                        "client_core: using cached tenant_access_token "
+                        f"(expires_in={int(self._token_expire - now)}s)",
+                        file=sys.stderr,
+                    )
                     return self._token
-            except Exception:
-                pass
+            except Exception as e:
+                print(
+                    f"client_core: token_cache_read_failed for tenant_access_token: {e}",
+                    file=sys.stderr,
+                )
 
         url = f"{self.base_url}/open-apis/auth/v3/tenant_access_token/internal"
         body = json.dumps({"app_id": self.app_id, "app_secret": self.app_secret}).encode()
@@ -213,14 +505,20 @@ class FeishuClientCore:
         write_path = resolve_token_cache_path(for_write=True)
         safe_write_json(write_path, {"app_id": self.app_id, "brand": self.brand, "token": self._token, "expire": self._token_expire})
         return self._token
-    
+
     def _ensure_user_token(self):
         """获取 user_access_token，支持过期检测和自动刷新"""
         now = time.time()
         token_expire = self.creds.get("userTokenExpire", 0)
 
-        # token 未过期，直接返回
-        if self.user_access_token and (not token_expire or now < token_expire - 60):
+        # token 未过期（提前 30 分钟刷新），直接返回
+        if self.user_access_token and (not token_expire or now < token_expire - 1800):
+            print(
+                f"client_core: using cached user_access_token "
+                f"(expires_in={int(token_expire - now) if token_expire else 'unknown'}s, "
+                f"fingerprint={self._token_fingerprint(self.user_access_token)})",
+                file=sys.stderr,
+            )
             return self.user_access_token
 
         # token 过期或未配置，尝试用 refresh_token 刷新
@@ -330,30 +628,40 @@ class FeishuClientCore:
         # --- Priority 1: Explicit caller override ---
         if use_user_token is not None:
             if entry is None:
-                return use_user_token
-
-            identity = entry["identity"]
-            if use_user_token and identity == APP_ONLY:
-                raise RuntimeError(
-                    f"'{method_name}' 是飞书 API 限制的仅应用身份接口（APP_ONLY），不支持 user_access_token。\n"
-                    f"请移除 use_user_token=True 参数，让系统自动使用应用身份调用。\n"
-                    f"如果应用身份权限不足，需要在飞书开放平台给自建应用开通对应权限。"
-                )
-            if not use_user_token and identity == USER_ONLY:
-                raise RuntimeError(
-                    f"'{method_name}' 是仅用户身份接口（USER_ONLY），不支持 tenant_access_token。\n"
-                    f"请确保凭证文件中 user_access_token 有效，"
-                    f"或运行 python3 feishu-auth/auth_get_user_token.py 重新授权。"
-                )
-            return use_user_token
+                resolved = use_user_token
+                reason = f"explicit use_user_token={use_user_token}"
+            else:
+                identity = entry["identity"]
+                if use_user_token and identity == APP_ONLY:
+                    raise RuntimeError(
+                        f"'{method_name}' 是飞书 API 限制的仅应用身份接口（APP_ONLY），不支持 user_access_token。\n"
+                        f"请移除 use_user_token=True 参数，让系统自动使用应用身份调用。\n"
+                        f"如果应用身份权限不足，需要在飞书开放平台给自建应用开通对应权限。"
+                    )
+                if not use_user_token and identity == USER_ONLY:
+                    raise RuntimeError(
+                        f"'{method_name}' 是仅用户身份接口（USER_ONLY），不支持 tenant_access_token。\n"
+                        f"请确保凭证文件中 user_access_token 有效，"
+                        f"或运行 python3 feishu-auth/auth_get_user_token.py 重新授权。"
+                    )
+                resolved = use_user_token
+                reason = f"explicit use_user_token={use_user_token}"
+            print(f"Resolved identity for '{method_name}': {'user' if resolved else 'tenant'} (reason: {reason})", file=sys.stderr)
+            return resolved
 
         # --- Priority 2: Registry-driven resolution ---
         if entry is not None:
             identity = entry["identity"]
 
             if identity == APP_ONLY:
+                resolved = False
+                reason = "endpoint is APP_ONLY"
+                print(f"Resolved identity for '{method_name}': tenant (reason: {reason})", file=sys.stderr)
                 return False
             if identity == USER_ONLY:
+                resolved = True
+                reason = "endpoint is USER_ONLY"
+                print(f"Resolved identity for '{method_name}': user (reason: {reason})", file=sys.stderr)
                 return True
 
             # BOTH: check granted scopes
@@ -366,14 +674,26 @@ class FeishuClientCore:
             user_ok = not user_scopes or user_scopes.issubset(granted["user"])
 
             if user_ok and not tenant_ok:
+                resolved = True
+                reason = "user scope available, tenant scope missing"
+                print(f"Resolved identity for '{method_name}': user (reason: {reason})", file=sys.stderr)
                 return True
             if tenant_ok and not user_ok:
+                resolved = False
+                reason = "tenant scope available, user scope missing"
+                print(f"Resolved identity for '{method_name}': tenant (reason: {reason})", file=sys.stderr)
                 return False
             # Both OK or neither OK: use global default
-            return default_user
+            resolved = default_user
+            reason = f"default_identity={default_identity}, both scopes available"
+            print(f"Resolved identity for '{method_name}': {'user' if resolved else 'tenant'} (reason: {reason})", file=sys.stderr)
+            return resolved
 
         # --- Priority 3: Not in registry, use global default ---
-        return default_user
+        resolved = default_user
+        reason = f"default_identity={default_identity}, no registry entry"
+        print(f"Resolved identity for '{method_name}': {'user' if resolved else 'tenant'} (reason: {reason})", file=sys.stderr)
+        return resolved
 
     def _check_required_scopes(self, method_name, use_user_token):
         """调用前权限预检：根据 registry 和当前身份检查 scope 是否就绪。
@@ -418,9 +738,7 @@ class FeishuClientCore:
         scope_list = ", ".join(sorted(missing))
         existing = ", ".join(sorted(granted_set)) or "无"
 
-        # 判断是“权限未开通”还是“权限未请求”
-        tenant_scopes_declared = set(entry.get("scopes", {}).get("tenant", []))
-        user_scopes_declared = set(entry.get("scopes", {}).get("user", []))
+        # 判断是"权限未开通"还是"权限未请求"
         if use_user_token:
             requested = set(self.creds.get("userScopes", []))
             not_requested = missing - requested
@@ -523,9 +841,20 @@ class FeishuClientCore:
                         f.write(resp.read())
                     return str(save)
                 resp_data = resp.read().decode("utf-8")
+                if attempt > 0:
+                    print(
+                        f"client_core: request succeeded after {attempt + 1} attempts "
+                        f"({method} {url})",
+                        file=sys.stderr,
+                    )
                 break
             except urllib.error.HTTPError as e:
                 if e.code >= 500 and attempt < max_retries:
+                    print(
+                        f"client_core: retrying request attempt {attempt + 2}/{max_retries + 1} "
+                        f"for {method} {url}: HTTP {e.code}",
+                        file=sys.stderr,
+                    )
                     time.sleep(1 * (1 << attempt))
                     continue
                 resp_data = e.read().decode("utf-8")
@@ -539,12 +868,23 @@ class FeishuClientCore:
                 hint = ""
                 if e.code == 400 and ("权限" in detail or "未开通" in detail or biz_code in (99991672, 112005, 1130001)):
                     hint = self._admin_approval_hint(caller_name, use_user_token)
-                raise RuntimeError(f"HTTP {e.code} | {detail} | URL: {url}{hint}") from e
+                raise RuntimeError(
+                    f"HTTP {e.code} | {detail} | URL: {url}{hint}"
+                    f"{' (after ' + str(attempt + 1) + ' attempts)' if attempt > 0 else ''}"
+                ) from e
             except urllib.error.URLError as e:
                 if attempt < max_retries:
+                    print(
+                        f"client_core: retrying request attempt {attempt + 2}/{max_retries + 1} "
+                        f"for {method} {url}: network error {e.reason}",
+                        file=sys.stderr,
+                    )
                     time.sleep(1 * (1 << attempt))
                     continue
-                raise RuntimeError(f"Network error: {e.reason} | URL: {url}") from e
+                raise RuntimeError(
+                    f"Network error: {e.reason} | URL: {url}"
+                    f"{' (after ' + str(attempt + 1) + ' attempts)' if attempt > 0 else ''}"
+                ) from e
 
         try:
             data = json.loads(resp_data)
@@ -559,7 +899,7 @@ class FeishuClientCore:
                 hint = self._admin_approval_hint(caller_name, use_user_token)
             raise RuntimeError(f"{detail} | URL: {url}{hint}")
         return data.get("data", data)
-    
+
     def _paginate(self, method, path, *, items_key="items", page_token_key="page_token",
                   has_more_key="has_more", max_results=None, page_token_in="query",
                   page_size=50, extra_query=None, extra_body=None, use_user_token=None):
@@ -583,7 +923,10 @@ class FeishuClientCore:
         """
         results = []
         page_token = None
-        while True:
+        page_count = 0
+        max_pages = 10000
+        while page_count < max_pages:
+            page_count += 1
             if page_token_in == "body":
                 body = dict(extra_body or {})
                 body["page_size"] = page_size
@@ -598,13 +941,29 @@ class FeishuClientCore:
                 data = self._request(method, path, query=query, body=extra_body, use_user_token=use_user_token)
             items = data.get(items_key, [])
             results.extend(items)
+            if page_count == 1 or page_count % 10 == 0:
+                print(
+                    f"client_core: pagination fetched page {page_count}, "
+                    f"total items so far: {len(results)}",
+                    file=sys.stderr,
+                )
             if max_results is not None and len(results) >= max_results:
                 return results[:max_results]
             if not data.get(has_more_key):
                 break
             page_token = data.get(page_token_key)
             if not page_token:
+                print(
+                    "client_core: pagination breaking because page_token is empty "
+                    f"while {has_more_key} is still true (page {page_count})",
+                    file=sys.stderr,
+                )
                 break
+        if page_count >= max_pages:
+            print(
+                f"client_core: pagination reached max_pages={max_pages}, returning {len(results)} items",
+                file=sys.stderr,
+            )
         return results
 
     def clear_token_cache(self):

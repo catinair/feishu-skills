@@ -120,6 +120,35 @@ def get_runtime_config_dir():
     return _migrate_legacy_runtime_dir(workspace)
 
 
+def get_config_context():
+    """返回当前 canonical 配置目录及来源。
+
+    Returns:
+        {
+            "config_dir": Path,
+            "source": "platform_runtime_assets" | "env" | "skill_root",
+            "is_platform": bool,
+        }
+    """
+    env_dir = os.environ.get(FEISHU_CONFIG_DIR_ENV)
+    if env_dir:
+        return {"config_dir": Path(env_dir), "source": "env", "is_platform": False}
+
+    runtime_dir = get_runtime_config_dir()
+    if runtime_dir:
+        return {
+            "config_dir": runtime_dir,
+            "source": "platform_runtime_assets",
+            "is_platform": True,
+        }
+
+    return {
+        "config_dir": SKILL_ROOT / "config",
+        "source": "skill_root",
+        "is_platform": False,
+    }
+
+
 def get_config_dir(*, for_write=False):
     """返回当前应使用的配置目录。
 
@@ -143,7 +172,12 @@ def get_config_dir(*, for_write=False):
 
 
 def resolve_config_path(filename, *, for_write=False):
-    """解析单个配置文件路径，读操作支持运行时 -> skill-root 的 fallback。
+    """解析单个配置文件路径。
+
+    优先级：
+    1. FEISHU_CONFIG_DIR 环境变量
+    2. 平台运行时目录（for_write=True 时自动创建）
+    3. <skill-root>/config/ 下的模块常量路径
 
     Args:
         filename: 配置文件名，如 "credentials.json"
@@ -153,6 +187,12 @@ def resolve_config_path(filename, *, for_write=False):
     if env_dir:
         return Path(env_dir) / filename
 
+    runtime_dir = get_runtime_config_dir()
+    if runtime_dir:
+        if for_write:
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+        return runtime_dir / filename
+
     # 向后兼容：测试代码会 patch 下面这些模块级常量
     constant_map = {
         "credentials.json": CREDENTIALS_FILE,
@@ -160,31 +200,7 @@ def resolve_config_path(filename, *, for_write=False):
         "permissions.json": PERMISSIONS_FILE,
         "risk_policy.json": RISK_POLICY_FILE,
     }
-    default_path = constant_map.get(filename, CONFIG_DIR / filename)
-
-    if for_write:
-        runtime_dir = get_runtime_config_dir()
-        if runtime_dir:
-            runtime_dir.mkdir(parents=True, exist_ok=True)
-            return runtime_dir / filename
-        return default_path
-
-    # 读操作：优先运行时文件，不存在则尝试旧路径，都不存在则回退到模块常量
-    runtime_dir = get_runtime_config_dir()
-    if runtime_dir:
-        runtime_path = runtime_dir / filename
-        if runtime_path.exists():
-            return runtime_path
-
-        # 迁移失败或旧路径仍有数据时，回退读取
-        workspace = _detect_platform_workspace()
-        if workspace:
-            legacy_dir = workspace / _LEGACY_RUNTIME_DIR_NAME / SKILL_ROOT.name
-            legacy_path = legacy_dir / filename
-            if legacy_path.exists():
-                return legacy_path
-
-    return default_path
+    return constant_map.get(filename, CONFIG_DIR / filename)
 
 
 def safe_write_json(path, data, *, mode=0o644):
@@ -222,6 +238,53 @@ def resolve_token_cache_path(*, for_write=False):
     return resolve_config_path(".token_cache.json", for_write=for_write)
 
 
+TOKEN_HISTORY_FILE = ".token_history.jsonl"
+
+
+def resolve_token_history_path(*, for_write=False):
+    """解析 token 刷新历史记录文件路径。
+
+    与 resolve_config_path 同一优先级：
+    1. FEISHU_CONFIG_DIR 环境变量
+    2. 平台 runtime_assets/ 目录
+    3. <skill-root>/config/.token_history.jsonl（本地 fallback）
+    """
+    return resolve_config_path(TOKEN_HISTORY_FILE, for_write=for_write)
+
+
+def append_token_history(record):
+    """向 token 历史文件追加一条记录。
+
+    使用 JSON Lines 格式，每条记录独占一行。写入后显式 fsync，
+    尽量保证进程异常退出时记录不丢失。历史文件首次创建时设置
+    600 权限，避免 token fingerprint 被其他用户读取。
+
+    记录失败不应影响主流程，调用方通常无需捕获异常。
+    """
+    path = resolve_token_history_path(for_write=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    line = json.dumps(record, ensure_ascii=False, default=str) + "\n"
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line)
+            f.flush()
+            os.fsync(f.fileno())
+    except Exception as e:
+        print(
+            f"token_history_append_failed: {e}",
+            file=sys.stderr,
+        )
+        return
+
+    # 首次创建文件时设置 600 权限
+    try:
+        if path.stat().st_size == len(line.encode("utf-8")) or path.stat().st_size == 0:
+            os.chmod(path, 0o600)
+    except Exception:
+        pass
+
+
 def default_credentials_path():
     return resolve_config_path("credentials.json")
 
@@ -234,12 +297,32 @@ def get_risk_policy_path():
     return resolve_config_path("risk_policy.json")
 
 
+def _try_load_skill_root_json(filename):
+    """平台环境下尝试从 skill-root/config 读取旧配置。
+
+    Returns:
+        解析后的 JSON dict；不存在或非平台环境时返回 None。
+    """
+    ctx = get_config_context()
+    if not ctx["is_platform"]:
+        return None
+    fallback = SKILL_ROOT / "config" / filename
+    if fallback.exists():
+        with open(fallback, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
 def load_settings():
     settings = {"brand": DEFAULT_BRAND}
     path = resolve_config_path("settings.json")
     if path.exists():
         with open(path, "r", encoding="utf-8") as f:
             settings = _deep_merge(settings, json.load(f))
+        return settings
+    fallback_data = _try_load_skill_root_json("settings.json")
+    if fallback_data is not None:
+        settings = _deep_merge(settings, fallback_data)
     return settings
 
 
@@ -282,18 +365,24 @@ def load_granted_scopes():
 
 def load_permissions_config():
     path = resolve_config_path("permissions.json")
-    if not path.exists():
-        return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    if path.exists():
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    fallback_data = _try_load_skill_root_json("permissions.json")
+    if fallback_data is not None:
+        return fallback_data
+    return {}
 
 
 def load_risk_policy():
     path = resolve_config_path("risk_policy.json")
-    if not path.exists():
-        return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    if path.exists():
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    fallback_data = _try_load_skill_root_json("risk_policy.json")
+    if fallback_data is not None:
+        return fallback_data
+    return {}
 
 
 def default_risk_policy():
@@ -457,6 +546,22 @@ def load_credentials_data(credentials_path=None):
     if path.exists():
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f), path
+
+    # 平台环境下 fallback 读取 skill-root 或旧 runtime_credentials 配置
+    if credentials_path is None:
+        ctx = get_config_context()
+        if ctx["is_platform"]:
+            fallbacks = [
+                SKILL_ROOT / "config" / "credentials.json",
+            ]
+            workspace = _detect_platform_workspace()
+            if workspace:
+                legacy_dir = workspace / _LEGACY_RUNTIME_DIR_NAME / SKILL_ROOT.name
+                fallbacks.append(legacy_dir / "credentials.json")
+            for fallback in fallbacks:
+                if fallback.exists():
+                    with open(fallback, "r", encoding="utf-8") as f:
+                        return json.load(f), fallback
 
     app_id = os.environ.get("FEISHU_APP_ID")
     app_secret = os.environ.get("FEISHU_APP_SECRET")
