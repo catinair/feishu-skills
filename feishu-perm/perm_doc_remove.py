@@ -15,6 +15,7 @@ def main():
     parser.add_argument("--type", required=True, help="类型：docx/sheet/bitable/file/mindnote/slides")
     parser.add_argument("--member-id", required=True, help="协作者 ID")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     confirm_action_or_exit(
@@ -25,7 +26,16 @@ def main():
 
     client = create_client()
     result = client.perm_remove_member(args.token, args.type, args.member_id)
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    print_json({
+        "status": "ok",
+        "token": args.token,
+        "type": args.type,
+        "member_id": args.member_id,
+    })
 
 
 if __name__ == "__main__":

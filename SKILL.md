@@ -19,7 +19,12 @@ metadata:
         "feishu_common/_client.py",
         "feishu_common/_client_core.py",
         "feishu_common/_config_loader.py",
-        "feishu-setup/setup_check.py"
+        "feishu_common/_permission_helper.py",
+        "feishu-setup/setup_check.py",
+        "feishu-setup/setup_bitable_infrastructure.py",
+        "feishu-setup/setup_create_app.py",
+        "feishu-setup/setup_verify.py",
+        "feishu-auth/auth_device_flow.py"
       ]
 ---
 
@@ -49,7 +54,6 @@ metadata:
 | 权限 | `feishu-perm` | 协作者管理 |
 | 幻灯片 | `feishu-slides` | 媒体上传 |
 | 任务 | `feishu-task` | 创建/获取/列取/更新任务、评论读写 |
-| 自定义扩展 | `custom` | 用户自定义脚本、子 skill、组合工作流（gitignore，拉取更新不受影响） |
 
 ## 意图路由
 
@@ -80,6 +84,7 @@ metadata:
 | **克隆多维表格表结构** | **`shortcuts`** | **`shortcut_base_clone_table.py`** |
 | 发消息 | `feishu-im` | `im_send_message.py` |
 | 建群/群管理 | `feishu-im` | `im_create_chat.py` / `im_chat_*.py` |
+| 搜索群组 | `feishu-im` | `im_search_chats.py` |
 | **群富文本通知** | **`shortcuts`** | **`shortcut_notify_group.py`** |
 | **上传文件并发送** | **`shortcuts`** | **`shortcut_upload_and_send.py`** |
 | 搜索云空间文件 | `feishu-drive` | `drive_search.py` |
@@ -120,6 +125,7 @@ metadata:
 | `shortcut_notify_group.py` | 群富文本通知 | "发个通知到群里" |
 | `shortcut_upload_and_send.py` | 上传文件并发送 | "把这个文件发给某人" |
 | `shortcut_meeting_notify.py` | 创建日程并通知群 | "建个会议通知大家" |
+| `shortcut_team_calendar.py` | 团队日程管理：订阅、诊断、报告 | "订阅团队所有人的日历并查看本周安排" |
 
 ## 子模块文档
 
@@ -133,7 +139,6 @@ metadata:
 | `feishu-sheets` | `feishu-sheets/SKILL.md` |
 | `feishu-minutes` | `feishu-minutes/SKILL.md` |
 | `feishu-task` | `feishu-task/SKILL.md` |
-| `custom` | `custom/SKILL.md` |
 
 ## Skill 目录结构完整性检查
 
@@ -149,10 +154,15 @@ feishu-skills/
 │   ├── __init__.py
 │   ├── _client.py
 │   ├── _client_core.py
-│   └── _config_loader.py
+│   ├── _config_loader.py
+│   └── _permission_helper.py
 ├── feishu-setup/
-│   └── setup_check.py
+│   ├── setup_check.py
+│   ├── setup_create_app.py
+│   ├── setup_verify.py
+│   └── setup_verify_structure.py
 ├── feishu-auth/
+│   └── auth_device_flow.py
 ├── feishu-base/
 ├── feishu-calendar/
 ├── feishu-contact/
@@ -196,39 +206,105 @@ python3 feishu-setup/setup_verify_structure.py
 
 ## 首次配置检查
 
-本 skill 被触发时，**先检查配置是否就绪，仅在缺失时引导用户完成配置**。已配置好的环境不要重复提示。
+本 skill 被触发时，**优先尝试直接执行业务脚本**，让 `_ensure_user_token()` 自动刷新过期 token。仅在业务脚本明确失败时，才运行 `setup_check.py` 诊断。
 
-### 快速检测
+### 懒检查（推荐）
 
-运行环境检测脚本获取完整状态：
+1. 直接执行业务脚本，`FeishuClient` 内部会自动处理 token 刷新
+2. 若返回 401/403 或 token 相关错误 → 运行 `setup_check.py` 诊断
+3. 若 `setup_check.py` 输出 `next_command` 包含 `--refresh` → 说明 RT 可用，运行刷新即可秒级恢复
+4. 若 `next_command` 包含 `auth_device_flow.py` → 说明 RT 也不可用，需要重新授权
 
-```bash
-python3 feishu-setup/setup_check.py
-```
+**核心原则**：`user_access_token` 过期 ≠ `refresh_token` 过期。`setup_check.py` 会优先判断 Bitable 中是否有可用的 RT，有则走秒级刷新，无需重新授权。
 
-输出中 `all_ready: true` 表示配置就绪，否则 `missing` 字段列出缺失项。
+### 完整检测（兜底）
+
+当懒检查无法定位问题时，运行完整检测：
+
+### 配置未就绪时的处理顺序
+
+运行 `setup_check.py` 后，按以下顺序处理，**不要自行推理其他方案**：
+
+1. **`credentials_valid` 为 `false`**：
+   - **优先方式**：通过 `setup_create_app.py` 自动创建/绑定应用：
+     ```bash
+     python3 feishu-setup/setup_create_app.py --begin --qr --json
+     # 优先用 deliverfile 交付 qr_path 二维码图片给用户，附带链接备用；若无 qr_path 则发链接并告知可按需生成二维码
+     # 用户扫码确认后：
+     python3 feishu-setup/setup_create_app.py --poll --json
+     ```
+   - **备选方式**：引导用户手动提供 `appId` + `appSecret`，通过 resolver 写入凭证文件。
+   - 平台环境自动写入 `runtime_assets/feishu-skills/`，本地写入 `config/`。
+
+2. **`bitable_infrastructure_ready` 为 `false`**：
+   - 先确保免审权限已开通（`bitable:app`、`base:app:create`、`base:table:create`、`base:block:create`、`base:record:create`、`base:record:update`）：
+     ```bash
+     python3 feishu-setup/setup_scopes.py --minimal
+     # 将输出的短链接发给用户确认（仅含 6 个免审权限，不要用全量模式）
+     ```
+   - 运行 `python3 feishu-setup/setup_bitable_infrastructure.py` 创建多维表格
+   - **注意**：Bitable 基础设施必须在用户授权前创建，否则 RT 无处存储
+
+3. **`user_token_ready` 为 `false`**：
+   - **看 `next_command` 判断恢复路径**：
+     - 若 `next_command` 包含 `auth_diagnose_token.py --refresh`：
+       → RT 可用，运行刷新即可秒级恢复：
+       ```bash
+       python3 feishu-auth/auth_diagnose_token.py --refresh
+       ```
+     - 若 `next_command` 包含 `auth_device_flow.py --begin`：
+       → RT 不可用，需要重新 Device Flow 授权：
+       ```bash
+       python3 feishu-auth/auth_device_flow.py --begin --qr --json
+       # 优先用 deliverfile 交付 qr_path 二维码图片给用户，附带链接和授权码备用
+       # 用户扫码/点击确认后：
+       python3 feishu-auth/auth_device_flow.py --poll --json
+       ```
+   - **备选方式（Authorization Code Flow，本地环境 fallback）**：
+     ```bash
+     python3 feishu-auth/auth_get_user_token.py --print-auth-url --json
+     # 用户贴回回调 URL 后：
+     python3 feishu-auth/auth_get_user_token.py --callback-url "<完整URL>" --json
+     ```
+   - **禁止**：寻找 refresh 脚本、手动操作 `credentials.json`、调用任何 token/refresh 接口测试。
+   - 详细约束见 [`docs/policies.md`](docs/policies.md) § 凭证故障处理规则。
+
+4. **其他缺失项**：按 `missing` 列表逐个引导补全。
 
 ### 完整引导
 
 新用户或配置不完整时，参考 `feishu-setup/SKILL.md` 进行分步引导，覆盖：
 
-0. 飞书开放平台应用创建
-1. 应用权限开通
-2. 重定向 URL 配置
-3. 凭证填写
-4. OAuth 用户授权（v2 流程）
-5. 权限同步
+1. 应用创建/绑定（自动化 Device Flow 或手动）
+2. 权限检测与开通（免审权限自动开通，非免审生成授权链接）
+3. Bitable 基础设施创建（refresh_token 云端备份）
+4. 用户授权（Device Flow 或 Authorization Code Flow）
+5. 权限同步（授权后自动完成）
 6. 风险策略配置
-7. 验证测试
+7. 验证测试（含在线验证）
+
+**关键原则**：Bitable 基础设施必须在用户授权前创建，确保 RT 有存储位置。用户始终只做一种操作：点击链接确认。
 
 ### 检查顺序（快速版）
 
-1. **凭证 + 用户授权**（必须）：运行 `python3 feishu-setup/setup_check.py`，检查 `credentials_valid` 和 `user_token_ready`
-   - 缺失时：引导用户提供 appId + appSecret，通过 resolver 写入凭证文件（平台环境自动写入 `runtime_assets/feishu-skills/`，本地写入 `config/`），然后运行 `python3 feishu-auth/auth_get_user_token.py` 完成 OAuth 授权
+1. **凭证**（必须）：运行 `python3 feishu-setup/setup_check.py`，检查 `credentials_valid`
+   - 缺凭证：运行 `python3 feishu-setup/setup_create_app.py --begin --qr --json` 自动创建应用，优先用 `deliverfile` 交付 `qr_path` 二维码图片，或引导用户手动提供 appId + appSecret
+   - 已存在：跳过
+
+2. **权限**（必须）：应用创建后，开通 Bitable 基础设施所需的 6 个免审权限（`bitable:app`、`base:app:create`、`base:table:create`、`base:block:create`、`base:record:create`、`base:record:update`）
+   - 生成链接：运行 `python3 feishu-setup/setup_scopes.py --minimal`，将短链接发给用户确认
+   - **不要用 `setup_scopes.py` 的全量模式**（`--json` / `--apply`），那会生成约 160 项权限的链接
+
+3. **Bitable 基础设施**（必须）：运行 `python3 feishu-setup/setup_check.py`，检查 `bitable_infrastructure_ready`
+   - 缺失时：运行 `python3 feishu-setup/setup_bitable_infrastructure.py` 创建多维表格
+   - 已存在：跳过
+
+4. **用户授权**（必须）：运行 `python3 feishu-setup/setup_check.py`，检查 `user_token_ready`
+   - 缺授权：运行 `python3 feishu-auth/auth_device_flow.py --begin --qr --json` 发起 Device Flow 授权，优先用 `deliverfile` 交付 `qr_path` 二维码图片（用户扫码确认后 `--poll --json`）
    - OAuth 成功后自动创建 settings.json（用户信息）和 permissions.json（权限清单），无需手动维护
    - 已存在：跳过
 
-2. **信任文件夹**（user 模式可选，tenant 模式必须）：检查 `risk_policy.json` 中 `workspace.trusted_folder_tokens` 是否有至少一项
+5. **信任文件夹**（user 模式可选，tenant 模式必须）：检查 `risk_policy.json` 中 `workspace.trusted_folder_tokens` 是否有至少一项
    - 缺失时：提示用户在飞书云空间中找到目标文件夹，从 URL 中提取 token 填入
    - 已存在：跳过
 
@@ -242,4 +318,8 @@ python3 feishu-setup/setup_check.py
 ## 说明
 
 本文件只负责 skill 元数据、能力边界与入口索引。
-执行规则与风险策略不再在这里重复维护，统一见 `docs/policies.md`。
+
+- 执行规则与风险策略见 [`docs/policies.md`](docs/policies.md)；
+- **凭证/token 故障禁止手动调试，必须走内置授权脚本重新授权**，规则见 [`docs/policies.md`](docs/policies.md)；
+- 通用 CLI 约定（`--yes`、`--raw`、`--identity`、身份选择）见 [`docs/usage.md`](docs/usage.md)；
+- 各子模块详细用法见对应 `feishu-*/SKILL.md`。

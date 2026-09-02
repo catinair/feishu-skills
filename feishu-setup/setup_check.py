@@ -10,28 +10,37 @@ setup_check.py -- 飞书 Skills 环境配置检测
     python3 feishu-setup/setup_check.py --json    # 纯 JSON 输出
 """
 
+import argparse
 import json
-import os
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from feishu_common import write_default_risk_policy, load_default_identity
+from feishu_common import (
+    write_default_risk_policy,
+    load_default_identity,
+    log_config_paths,
+    create_client,
+)
 from feishu_common._config_loader import (
     resolve_config_path,
-    get_config_dir,
     get_config_context,
     load_credentials_data,
-    get_runtime_config_dir,
+    load_settings,
+    load_permissions_config,
+    load_risk_policy,
+    get_default_folder_token,
+    trusted_folder_tokens,
+    SKILL_ROOT,
 )
 from feishu_common._endpoint_registry import ENDPOINT_REGISTRY, ADMIN_APPROVAL_SCOPES
 
 # 核心业务需要的最低 user scopes
 CORE_USER_SCOPES = {
-    "offline_access",           # refresh_token 必需
-    "auth:user.id:read",        # 用户身份基础
-    "im:message",               # 发送消息
+    "offline_access",  # refresh_token 必需
+    "auth:user.id:read",  # 用户身份基础
+    "im:message",  # 发送消息
     "contact:user.base:readonly",  # 通讯录查询
 }
 
@@ -93,6 +102,79 @@ RECOMMENDED_USER_SCOPES = CORE_USER_SCOPES | {
 }
 
 
+def _canonical_config_path(filename):
+    """返回配置文件的 canonical 路径（详情展示用，会按需创建平台运行时目录）。"""
+    return resolve_config_path(filename, for_write=True)
+
+
+def _config_found(filename):
+    """判断配置文件是否存在（canonical 路径或平台 skill-root fallback）。"""
+    if resolve_config_path(filename, for_write=False).exists():
+        return True
+    if get_config_context()["is_platform"]:
+        fallback = SKILL_ROOT / "config" / filename
+        if fallback.exists():
+            return True
+    return False
+
+
+def _extract_bitable_ids(settings: dict):
+    """从已加载的 settings 字典中提取 Bitable 基础设施 ID。
+
+    唯一的字段路径定义点：两处调用方（_bitable_configured / check_bitable_infrastructure）
+    都经过这里，避免字段名漂移引发的静默 bug。
+
+    返回 (app_token, table_id) 二元组，任一为 None 表示未配置。
+    """
+    infra = settings.get("infrastructure", {}).get("bitable", {})
+    app_token = infra.get("app_token")
+    table_id = infra.get("tables", {}).get("token_backup")
+    return app_token, table_id
+
+
+def _bitable_configured():
+    """检查 settings.json 中是否已配置 Bitable 基础设施（app_token + table_id）。"""
+    settings_path = resolve_config_path("settings.json", for_write=False)
+    if not settings_path.exists():
+        return False
+    try:
+        with open(settings_path) as f:
+            settings = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return False
+    app_token, table_id = _extract_bitable_ids(settings)
+    return bool(app_token and table_id)
+
+
+def _get_rt_expire_time() -> float:
+    """从 Bitable 读取最新 refresh_token 的过期时间戳，失败返回 0。
+
+    仅在 Bitable 基础设施已配置且凭证完整时尝试读取，不触发 token 刷新。
+    """
+    if not _bitable_configured():
+        return 0.0
+    try:
+        from feishu_common.cloud_token_manager import CloudTokenManager
+
+        settings = load_settings()
+        creds_data, _ = load_credentials_data()
+        app_id = creds_data.get("appId")
+        app_secret = creds_data.get("appSecret")
+        if not app_id or not app_secret:
+            return 0.0
+        app_token, table_id = _extract_bitable_ids(settings)
+        if not app_token or not table_id:
+            return 0.0
+        manager = CloudTokenManager(
+            app_id=app_id,
+            app_secret=app_secret,
+            bitable_infra={"app_token": app_token, "table_id": table_id},
+        )
+        return manager.get_refresh_token_expire()
+    except Exception:
+        return 0.0
+
+
 def check_python():
     """Python 版本 >= 3.9"""
     v = sys.version_info
@@ -100,23 +182,24 @@ def check_python():
     return {
         "python_ready": ok,
         "python_version": f"{v.major}.{v.minor}.{v.micro}",
-        "python_detail": "OK" if ok else f"需要 Python >= 3.9，当前 {v.major}.{v.minor}.{v.micro}",
+        "python_detail": "OK"
+        if ok
+        else f"需要 Python >= 3.9，当前 {v.major}.{v.minor}.{v.micro}",
     }
 
 
 def check_credentials():
-    """credentials.json 存在且有 appId/appSecret"""
-    path = resolve_config_path("credentials.json")
+    """credentials.json 存在（或环境变量提供）且有 appId/appSecret"""
+    path = _canonical_config_path("credentials.json")
     result = {"credentials_ready": False, "credentials_valid": False}
 
-    if not path.exists():
-        result["detail"] = f"文件不存在: {path}"
-        return result
-
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data, _ = load_credentials_data()
+    except RuntimeError:
+        result["credentials_detail"] = f"文件不存在: {path}"
+        return result
     except (json.JSONDecodeError, OSError) as e:
-        result["detail"] = f"文件解析失败: {e}"
+        result["credentials_detail"] = f"文件解析失败: {e}"
         return result
 
     app_id = data.get("appId", "")
@@ -144,45 +227,51 @@ def check_credentials():
 
 
 def check_settings():
-    """settings.json 存在且配置有效。
+    """settings.json 存在且有 default_identity。
 
-    tenant 模式下只需 default_identity 为 tenant；
-    user 模式下额外需要 user.name。
+    用户信息（user.name/open_id 等）在 OAuth 授权后由 auth_get_user_token.py 自动填充，
+    setup 阶段不再要求手动输入名字。
     """
-    path = resolve_config_path("settings.json")
-    result = {"settings_ready": False, "default_identity": None, "user_name": None}
-
-    if not path.exists():
-        result["detail"] = f"文件不存在: {path}"
-        return result
+    path = _canonical_config_path("settings.json")
+    result = {
+        "settings_ready": False,
+        "default_identity": None,
+        "user_name": None,
+    }
 
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = load_settings()
     except (json.JSONDecodeError, OSError) as e:
         result["settings_detail"] = f"文件解析失败: {e}"
+        return result
+
+    if not _config_found("settings.json"):
+        result["settings_detail"] = f"文件不存在: {path}"
         return result
 
     result["default_identity"] = data.get("default_identity", "user")
     user = data.get("user", {})
     result["user_name"] = user.get("name", "")
+    # 只要 default_identity 存在即认为 settings 就绪；user.name 由授权后自动填充
+    result["settings_ready"] = bool(result["default_identity"])
 
-    if result["default_identity"] == "tenant":
-        result["settings_ready"] = True
-        result["settings_detail"] = "OK"
-    elif result["default_identity"] == "user":
-        result["settings_ready"] = bool(result["user_name"])
-        if not result["settings_ready"]:
-            result["settings_detail"] = "user 模式下缺少 user.name"
-        else:
-            result["settings_detail"] = "OK"
+    if not result["settings_ready"]:
+        result["settings_detail"] = "缺少 default_identity"
+    elif not result["user_name"]:
+        result["settings_detail"] = "OK (user 信息将在 OAuth 授权后自动填充)"
     else:
-        result["settings_detail"] = f"无效的 default_identity: {result['default_identity']}"
+        result["settings_detail"] = "OK"
     return result
 
 
 def check_user_token():
-    """user_access_token 存在、未过期、scope 检测；token 过期时只输出 next_command，不自动刷新。"""
-    path = resolve_config_path("credentials.json")
+    """user_access_token 存在、未过期；refresh_token 状态按模式（Bitable/本地）检测。
+
+    云模式（已配置 Bitable）：refresh_token 唯一持久化在 Bitable，credentials.json 不应含 RT。
+    非云模式（本地/开源部署）：refresh_token 保存在 credentials.json，由业务脚本自动刷新。
+    """
+    path = _canonical_config_path("credentials.json")
+    bitable_configured = _bitable_configured()
     result = {
         "user_token_ready": False,
         "user_token_expired": None,
@@ -190,8 +279,7 @@ def check_user_token():
         "user_token_scopes_sufficient": False,
         "user_token_scopes_recommended": False,
         "oauth_version": "unknown",
-        "has_refresh_token": False,
-        "refresh_token_expired": None,
+        "refresh_token_source": "bitable" if bitable_configured else "local",
         "next_command": None,
     }
 
@@ -205,36 +293,65 @@ def check_user_token():
         result["user_token_detail"] = f"文件解析失败: {e}"
         return result
 
+    # 云模式下 credentials.json 不应包含 refresh_token（RT 唯一持久化在 Bitable）
+    if bitable_configured and data.get("refreshToken"):
+        result["user_token_detail"] = (
+            "cloud mode: credentials.json 中仍包含 refresh_token，请先迁移到 Bitable"
+        )
+        result["next_command"] = "python3 feishu-setup/setup_bitable_infrastructure.py"
+        return result
+
     token = data.get("userAccessToken", "") or data.get("user_access_token", "")
     if not token:
         result["user_token_detail"] = "user_access_token 未配置"
-        result["next_command"] = "python3 feishu-auth/auth_get_user_token.py --print-auth-url --json"
+        if bitable_configured:
+            result["next_command"] = (
+                "python3 feishu-auth/auth_device_flow.py --begin --qr --json"
+            )
+        else:
+            result["next_command"] = (
+                "python3 feishu-auth/auth_get_user_token.py --print-auth-url --json"
+            )
         return result
 
     # OAuth 版本检测：v2 token 通常是长 JWT（>500 字符）
     result["oauth_version"] = "v2" if len(token) > 500 else "v1"
 
-    # 刷新 token 状态（无论是否过期都显示）
+    # 过期检测
     expire = data.get("userTokenExpire", 0)
     now = time.time()
-    refresh_expire = data.get("refreshTokenExpire", 0)
-    result["has_refresh_token"] = bool(data.get("refreshToken", ""))
-    result["refresh_token_expired"] = refresh_expire > 0 and now > refresh_expire
-
     if expire > 0 and now > expire:
         result["user_token_expired"] = True
         result["user_token_ready"] = False
 
-        # refresh_token 有效 -> 给出刷新命令，由业务脚本/_ensure_user_token() 单一入口刷新
-        if result["has_refresh_token"] and not result["refresh_token_expired"]:
-            result["user_token_detail"] = "user_access_token 已过期，refresh_token 有效，由业务脚本自动刷新"
-            result["next_command"] = "python3 feishu-auth/auth_diagnose_token.py --refresh"
-            return result
-
-        # refresh_token 无效 或 刷新失败 -> 给出精确重新授权命令
-        result["next_command"] = "python3 feishu-auth/auth_get_user_token.py --print-auth-url --json"
-        if "user_token_detail" not in result:
-            result["user_token_detail"] = f"user_access_token 已过期（{int(now - expire)} 秒前），refresh_token 无效或刷新失败"
+        if bitable_configured:
+            # 云模式：RT 过期时间从 Bitable 读取
+            rt_expire = _get_rt_expire_time()
+            if rt_expire > 0 and now > rt_expire:
+                days_unused = int((now - rt_expire) / 86400)
+                result["user_token_detail"] = (
+                    f"user_access_token 已过期，且 refresh_token 已过期"
+                    f"（超过 {days_unused} 天未续期）。请重新授权"
+                )
+                result["next_command"] = (
+                    "python3 feishu-auth/auth_device_flow.py --begin --qr --json"
+                )
+            else:
+                result["user_token_detail"] = (
+                    "user_access_token 已过期，可使用 refresh_token 自动刷新"
+                )
+                result["next_command"] = (
+                    "python3 feishu-auth/auth_diagnose_token.py --refresh"
+                )
+        else:
+            # 非云模式：AT 过期一律建议由业务脚本自动刷新。
+            # _ensure_user_token() 会先重载磁盘 RT 再刷新，刷新失败才需要重新授权。
+            result["user_token_detail"] = (
+                "user_access_token 已过期，由业务脚本自动刷新"
+            )
+            result["next_command"] = (
+                "python3 feishu-auth/auth_diagnose_token.py --refresh"
+            )
         return result
 
     result["user_token_expired"] = False
@@ -256,17 +373,23 @@ def check_user_token():
 
 def check_permissions():
     """permissions.json 存在且有 tenant scopes"""
-    path = resolve_config_path("permissions.json")
-    result = {"permissions_ready": False, "tenant_scope_count": 0, "user_scope_count": 0}
-
-    if not path.exists():
-        result["permissions_detail"] = f"文件不存在: {path}（运行 auth_sync_permissions.py 同步）"
-        return result
+    path = _canonical_config_path("permissions.json")
+    result = {
+        "permissions_ready": False,
+        "tenant_scope_count": 0,
+        "user_scope_count": 0,
+    }
 
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = load_permissions_config()
     except (json.JSONDecodeError, OSError) as e:
         result["permissions_detail"] = f"文件解析失败: {e}"
+        return result
+
+    if not _config_found("permissions.json"):
+        result["permissions_detail"] = (
+            f"文件不存在: {path}（运行 auth_sync_permissions.py 同步）"
+        )
         return result
 
     scopes = data.get("scopes", {})
@@ -275,21 +398,22 @@ def check_permissions():
     result["tenant_scope_count"] = len(tenant)
     result["user_scope_count"] = len(user)
     result["permissions_ready"] = len(tenant) > 0
-    result["permissions_detail"] = "OK" if result["permissions_ready"] else "tenant scopes 为空"
+    result["permissions_detail"] = (
+        "OK" if result["permissions_ready"] else "tenant scopes 为空"
+    )
     return result
 
 
 def check_admin_approval_scopes():
     """扫描 permissions.json 中已声明但可能需要管理员审批的 scope，提前预警。"""
-    path = resolve_config_path("permissions.json")
     result = {"admin_approval_warnings": []}
 
-    if not path.exists():
+    try:
+        data = load_permissions_config()
+    except (json.JSONDecodeError, OSError):
         return result
 
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    if not _config_found("permissions.json"):
         return result
 
     scopes = data.get("scopes", {})
@@ -315,12 +439,14 @@ def check_admin_approval_scopes():
         methods_tenant = affected["tenant"].get(scope, [])
         methods_user = affected["user"].get(scope, [])
         methods = sorted(set(methods_tenant + methods_user))
-        warnings.append({
-            "scope": scope,
-            "reason": "该 scope 可能需要飞书管理员审批才能在平台生效",
-            "affected_methods": methods[:10],  # 最多展示 10 个，避免过长
-            "action": "在飞书开放平台 → 权限管理 → 申请并联系管理员审批，审批通过后重新发布应用并重新授权",
-        })
+        warnings.append(
+            {
+                "scope": scope,
+                "reason": "该 scope 可能需要飞书管理员审批才能在平台生效",
+                "affected_methods": methods[:10],  # 最多展示 10 个，避免过长
+                "action": "在飞书开放平台 → 权限管理 → 申请并联系管理员审批，审批通过后重新发布应用并重新授权",
+            }
+        )
 
     result["admin_approval_warnings"] = warnings
     return result
@@ -331,17 +457,17 @@ def check_risk_policy(identity="user"):
 
     tenant 模式要求配置 trusted_folder_tokens；user 模式下文件存在且结构有效即可。
     """
-    path = resolve_config_path("risk_policy.json")
+    path = _canonical_config_path("risk_policy.json")
     result = {"risk_policy_ready": False}
 
-    if not path.exists():
-        result["risk_policy_detail"] = f"文件不存在: {path}"
-        return result
-
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = load_risk_policy()
     except (json.JSONDecodeError, OSError) as e:
         result["risk_policy_detail"] = f"文件解析失败: {e}"
+        return result
+
+    if not _config_found("risk_policy.json"):
+        result["risk_policy_detail"] = f"文件不存在: {path}"
         return result
 
     workspace = data.get("workspace", {})
@@ -358,7 +484,94 @@ def check_risk_policy(identity="user"):
         result["risk_policy_detail"] = f"OK (user 模式可选，{len(tokens)} 个信任文件夹)"
     else:
         result["risk_policy_ready"] = len(tokens) > 0
-        result["risk_policy_detail"] = "OK" if result["risk_policy_ready"] else "tenant 模式需配置 trusted_folder_tokens"
+        result["risk_policy_detail"] = (
+            "OK"
+            if result["risk_policy_ready"]
+            else "tenant 模式需配置 trusted_folder_tokens"
+        )
+    return result
+
+
+def check_default_workspace_folder():
+    """检测默认工作区文件夹是否已配置（用于应用身份创建的资源落地）。"""
+    result = {
+        "default_workspace_folder_ready": False,
+        "default_workspace_folder_token": None,
+        "default_workspace_folder_label": None,
+        "default_workspace_folder_detail": None,
+    }
+
+    try:
+        token = get_default_folder_token()
+    except RuntimeError as e:
+        result["default_workspace_folder_detail"] = f"未配置默认文件夹: {e}"
+        return result
+
+    result["default_workspace_folder_token"] = token
+    result["default_workspace_folder_ready"] = bool(token)
+
+    # 找到对应的 label
+    policy = load_risk_policy()
+    for item in policy.get("workspace", {}).get("trusted_folder_tokens", []):
+        if item.get("token") == token:
+            result["default_workspace_folder_label"] = item.get("label", "")
+            break
+
+    if token in trusted_folder_tokens():
+        result["default_workspace_folder_detail"] = (
+            f"OK (label={result.get('default_workspace_folder_label') or '-'}, token={token[:10]}...)"
+        )
+    else:
+        result["default_workspace_folder_detail"] = (
+            f"token 不在 trusted_folder_tokens 中，请检查 risk_policy.json"
+        )
+        result["default_workspace_folder_ready"] = False
+
+    return result
+
+
+def check_bitable_infrastructure():
+    """检测 Bitable 基础设施是否已在 setup 阶段创建并可访问。"""
+    result = {
+        "bitable_infrastructure_ready": False,
+        "bitable_infrastructure_configured": False,
+        "bitable_infrastructure_accessible": False,
+        "bitable_access_error": None,
+        "bitable_app_token": None,
+        "bitable_table_id": None,
+    }
+
+    try:
+        settings = load_settings()
+    except (json.JSONDecodeError, OSError) as e:
+        result["bitable_infrastructure_detail"] = f"读取 settings.json 失败: {e}"
+        return result
+
+    app_token, table_id = _extract_bitable_ids(settings)
+
+    if not app_token or not table_id:
+        result["bitable_infrastructure_detail"] = "未配置 Bitable 基础设施"
+        return result
+
+    result["bitable_infrastructure_configured"] = True
+    result["bitable_app_token"] = app_token
+    result["bitable_table_id"] = table_id
+
+    # 尝试访问确认表格仍存在（需要 tenant token，避免触发 user token 刷新）
+    try:
+        client = create_client()
+        client.base_get(app_token, use_user_token=False)
+        result["bitable_infrastructure_accessible"] = True
+        result["bitable_infrastructure_ready"] = True
+        result["bitable_infrastructure_detail"] = "OK"
+    except Exception as e:
+        # 访问失败可能是网络或权限问题，不影响配置判定，但会单独报告
+        result["bitable_infrastructure_accessible"] = False
+        result["bitable_access_error"] = str(e)
+        # 仍视为 ready：配置已存在，业务脚本调用时会自动触发访问/刷新
+        result["bitable_infrastructure_ready"] = True
+        result["bitable_infrastructure_detail"] = f"已配置 (访问校验失败: {e})"
+
     return result
 
 
@@ -368,6 +581,7 @@ def run_all_checks():
     report = {
         "config_dir": str(ctx["config_dir"]),
         "config_dir_source": ctx["source"],
+        "is_platform": ctx["is_platform"],
     }
 
     # 先读取 default_identity，用于决定 risk_policy 是否必填
@@ -380,25 +594,33 @@ def run_all_checks():
         check_user_token(),
         check_permissions(),
         check_risk_policy(identity=identity),
+        check_default_workspace_folder(),
+        check_bitable_infrastructure(),
         check_admin_approval_scopes(),
     ]
 
     for c in checks:
         report.update(c)
 
+    # 云模式下 Bitable 基础设施是 refresh_token 的唯一存储，必须存在
+    bitable_required = True
+
     # user 模式下 risk_policy 可选
     risk_required = identity != "user"
 
     # 汇总
-    all_ready = all([
-        report.get("python_ready"),
-        report.get("credentials_valid"),
-        report.get("settings_ready"),
-        report.get("user_token_ready"),
-        report.get("user_token_scopes_sufficient"),
-        report.get("permissions_ready"),
-        risk_required and report.get("risk_policy_ready") or not risk_required,
-    ])
+    all_ready = all(
+        [
+            report.get("python_ready"),
+            report.get("credentials_valid"),
+            report.get("settings_ready"),
+            report.get("user_token_ready"),
+            report.get("user_token_scopes_sufficient"),
+            report.get("permissions_ready"),
+            report.get("bitable_infrastructure_ready"),
+            risk_required and report.get("risk_policy_ready") or not risk_required,
+        ]
+    )
     report["all_ready"] = all_ready
 
     # 缺失项
@@ -416,14 +638,14 @@ def run_all_checks():
         if report.get("next_command"):
             # 优先输出精确命令
             if report["next_command"].startswith("python3"):
-                recommendations.append(f"运行以下命令重新授权: {report['next_command']}")
+                recommendations.append(
+                    f"运行以下命令重新授权: {report['next_command']}"
+                )
             else:
                 recommendations.append(report["next_command"])
-        elif report.get("user_token_expired") and not report.get("has_refresh_token"):
-            recommendations.append("user_access_token 已过期且没有 refresh_token，需重新授权")
-        elif report.get("user_token_expired") and report.get("refresh_token_expired"):
-            recommendations.append("refresh_token 已过期，需重新授权")
-    if report.get("user_token_ready") and not report.get("user_token_scopes_sufficient"):
+    if report.get("user_token_ready") and not report.get(
+        "user_token_scopes_sufficient"
+    ):
         missing.append("user_token_scopes")
         missing_sc = report.get("missing_core_scopes", [])
         recommendations.append(f"重新授权以获取核心 scope: {', '.join(missing_sc)}")
@@ -432,7 +654,26 @@ def run_all_checks():
         recommendations.append("运行 auth_sync_permissions.py 同步权限")
     if risk_required and not report.get("risk_policy_ready"):
         missing.append("risk_policy")
-        recommendations.append("tenant 模式下需配置 risk_policy.json 中的 trusted_folder_tokens")
+        recommendations.append(
+            "tenant 模式下需配置 risk_policy.json 中的 trusted_folder_tokens"
+        )
+    if not report.get("default_workspace_folder_ready"):
+        recommendations.append(
+            "建议配置默认工作区文件夹：用 tenant 身份创建根文件夹并共享给用户 full_access，"
+            "然后在 risk_policy.json workspace.trusted_folder_tokens 中标记 default"
+        )
+    bitable_configured = report.get("bitable_infrastructure_configured")
+    bitable_accessible = report.get("bitable_infrastructure_accessible")
+    if not bitable_configured:
+        missing.append("bitable_infrastructure")
+        recommendations.append(
+            "运行 python3 feishu-setup/setup_bitable_infrastructure.py 创建多维表格基础设施"
+        )
+    elif not bitable_accessible:
+        recommendations.append(
+            "Bitable 基础设施已配置但访问校验失败，可能是网络/权限问题；"
+            "若业务脚本持续报错，请重新运行 setup_bitable_infrastructure.py"
+        )
 
     if report.get("oauth_version") == "v1":
         recommendations.append("检测到 v1 OAuth token，建议重新授权获取 v2 token")
@@ -452,111 +693,34 @@ def run_all_checks():
     return report
 
 
-def print_suggest_scopes():
-    """输出推荐 scope 列表，供用户在飞书控制台批量搜索开通。"""
-    from feishu_common._endpoint_registry import ENDPOINT_REGISTRY
-
-    # 收集所有 user scopes
-    all_user_scopes = set()
-    for entry in ENDPOINT_REGISTRY.values():
-        all_user_scopes.update(entry.get("scopes", {}).get("user", []))
-
-    # 合并推荐 scopes
-    merged = sorted(RECOMMENDED_USER_SCOPES | all_user_scopes)
-
-    print("=" * 50)
-    print("推荐开通的 scope 列表")
-    print("=" * 50)
-    print()
-    print("在飞书开放平台 → 权限管理 中，搜索以下 scope 名称并开通：")
-    print()
-
-    # 按类别分组输出
-    categories = {
-        "基础": ["offline_access", "auth:user.id:read"],
-        "IM 消息": [],
-        "通讯录": [],
-        "文档": [],
-        "云空间": [],
-        "表格": [],
-        "多维表格": [],
-        "知识库": [],
-        "日程": [],
-        "任务": [],
-        "妙记": [],
-        "权限管理": [],
-        "画板": [],
-    }
-    category_keywords = {
-        "IM 消息": "im:",
-        "通讯录": "contact:",
-        "文档": ["docx:", "docs:document.comment"],
-        "云空间": ["drive:", "space:"],
-        "表格": "sheets:",
-        "多维表格": ["bitable:", "base:"],
-        "知识库": "wiki:",
-        "日程": "calendar:",
-        "任务": "task:",
-        "妙记": "minutes:",
-        "权限管理": "docs:permission",
-        "画板": "board:",
-    }
-
-    for scope in merged:
-        placed = False
-        for cat, keywords in category_keywords.items():
-            if isinstance(keywords, list):
-                if any(scope.startswith(k) for k in keywords):
-                    categories[cat].append(scope)
-                    placed = True
-                    break
-            elif scope.startswith(keywords):
-                categories[cat].append(scope)
-                placed = True
-                break
-        if not placed and scope not in categories["基础"]:
-            categories["基础"].append(scope)
-
-    for cat, scopes in categories.items():
-        if not scopes:
-            continue
-        print(f"  【{cat}】")
-        for s in scopes:
-            is_admin = s in ADMIN_APPROVAL_SCOPES
-            suffix = "  ← 需管理员审批" if is_admin else ""
-            print(f"    {s}{suffix}")
-        print()
-
-    print(f"共 {len(merged)} 个 scope。标注「需管理员审批」的可跳过，对应功能暂不可用。")
-    print()
-    print("提示：可以一次性全选开通，OAuth 授权时会自动获取所有已开通的权限。")
-
-
 def main():
-    json_only = "--json" in sys.argv
-    fix_mode = "--fix" in sys.argv
-    suggest_scopes = "--suggest-scopes" in sys.argv
+    parser = argparse.ArgumentParser(description="飞书 Skills 环境配置检测")
+    parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
+    parser.add_argument(
+        "--fix", action="store_true", help="自动修复可修复项（如生成默认 risk_policy）"
+    )
+    # 注意：setup_check 不再提供自动刷新入口，避免与业务脚本形成双触发点竞态。
+    # token 刷新统一由业务脚本在 _ensure_user_token() 中处理。
+    # 使用 parse_known_args，避免被 pytest 等外部参数干扰
+    args, _ = parser.parse_known_args()
 
-    if suggest_scopes:
-        print_suggest_scopes()
-        return
-
+    log_config_paths()
     report = run_all_checks()
 
-    if fix_mode:
+    if args.fix:
         fixed = []
         if load_default_identity() == "user" and not report.get("risk_policy_ready"):
             if write_default_risk_policy():
                 fixed.append("risk_policy.json")
         report = run_all_checks()
         report["fixed"] = fixed
-        if json_only:
+        if args.json:
             print(json.dumps(report, indent=2, ensure_ascii=False))
             return
         print(f"已自动修复: {', '.join(fixed) if fixed else '无'}")
         print()
 
-    if json_only:
+    if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
         return
 
@@ -572,9 +736,21 @@ def main():
         ("用户 Token", "user_token_ready", "user_token_detail"),
         ("权限文件", "permissions_ready", "permissions_detail"),
         ("风险策略", "risk_policy_ready", "risk_policy_detail"),
+        (
+            "默认工作区文件夹",
+            "default_workspace_folder_ready",
+            "default_workspace_folder_detail",
+        ),
+        (
+            "多维表格基础设施",
+            "bitable_infrastructure_ready",
+            "bitable_infrastructure_detail",
+        ),
     ]
 
-    print(f"配置目录: {report.get('config_dir')} (来源: {report.get('config_dir_source')})")
+    print(
+        f"配置目录: {report.get('config_dir')} (来源: {report.get('config_dir_source')})"
+    )
     print()
 
     for label, key, detail_key in items:

@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from feishu_common import cli_run, create_client
+from feishu_common import cli_run, create_client, log_config_paths
 from feishu_common._config_loader import (
     resolve_config_path,
     load_credentials_data,
@@ -128,6 +128,8 @@ def main():
         help="只输出结果到 stdout，不写入文件",
     )
     args = parser.parse_args()
+
+    log_config_paths()
 
     target_path = _normalize_path(args.target) if args.target else resolve_config_path("permissions.json", for_write=True)
     credentials_path = _normalize_path(args.credentials) if args.credentials else _resolve_credentials_read_path()

@@ -16,17 +16,15 @@ metadata:
 
 ## 权限要求
 
-> **说明**：以下标注的审批要求基于常见企业配置。实际是否需要管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
-
-| 脚本 | 所需权限 | 审批说明 |
-|------|---------|----------|
-| calendar_list_events.py | `calendar:calendar` / `calendar:calendar:readonly` | 一般无需管理员审批 |
-| calendar_get_event.py | `calendar:calendar` / `calendar:calendar:readonly` | 一般无需管理员审批 |
-| calendar_create_event.py | `calendar:calendar` | 一般无需管理员审批 |
-| calendar_delete_event.py | `calendar:calendar` | 一般无需管理员审批 |
-| calendar_freebusy.py | `calendar:calendar.freebusy:readonly` + `contact:user.base:readonly` | 一般无需管理员审批 |
-| calendar_update_event.py | `calendar:calendar.event:update` | 一般无需管理员审批 |
-| calendar_list_calendars.py | `calendar:calendar:read` | 一般无需管理员审批 |
+| 脚本 | 所需权限 | 状态 |
+|------|---------|------|
+| calendar_list_events.py | `calendar:calendar` / `calendar:calendar:readonly` | 需确认 |
+| calendar_get_event.py | `calendar:calendar` / `calendar:calendar:readonly` | 需确认 |
+| calendar_create_event.py | `calendar:calendar` | 需确认 |
+| calendar_delete_event.py | `calendar:calendar` | 需确认 |
+| calendar_freebusy.py | `calendar:calendar.freebusy:readonly` + `contact:user.base:readonly` | 需确认 |
+| calendar_update_event.py | `calendar:calendar.event:update` | 免审 |
+| calendar_list_calendars.py | `calendar:calendar:read` | 免审 |
 
 ## 快捷命令
 
@@ -49,6 +47,18 @@ python3 feishu-calendar/calendar_get_event.py <event_id>
 python3 feishu-calendar/calendar_create_event.py "周会" --start "2026-04-25 14:00" --end "2026-04-25 15:00"
 python3 feishu-calendar/calendar_create_event.py "项目复盘" --start "2026-04-25 10:00" --end "2026-04-25 11:30" --location "会议室 A" --desc "季度复盘"
 ```
+
+**身份选择**：
+- 默认按 `config/settings.json` 中的 `default_identity` 创建日程；
+- `--identity user`：日程创建到用户主日历，组织者显示为当前用户；
+- `--identity tenant`：日程创建到应用日历，与用户主日历隔离。
+
+```bash
+python3 feishu-calendar/calendar_create_event.py "个人日程" --start "2026-04-25 14:00" --end "2026-04-25 15:00" --identity user
+python3 feishu-calendar/calendar_create_event.py "应用日程" --start "2026-04-25 14:00" --end "2026-04-25 15:00" --identity tenant
+```
+
+**输出说明**：写操作 CLI 默认输出精简摘要，加 `--raw` 可输出完整 API 响应。
 
 时间格式支持：
 - ISO 格式：`2026-04-25T14:00:00+08:00`
@@ -91,7 +101,7 @@ python3 feishu-calendar/calendar_freebusy.py --openid ou_xxx --start "2026-04-25
 |------|------|----------|
 | `calendar_list_events.py` | 查询日程列表 | `--calendar-id`, `--limit` |
 | `calendar_get_event.py` | 查询单个日程 | `<event_id>`, `--raw` |
-| `calendar_create_event.py` | 创建日程 | `<title>`, `--start`, `--end`, `--location`, `--desc` |
+| `calendar_create_event.py` | 创建日程 | `<title>`, `--start`, `--end`, `--location`, `--desc`, `--identity` |
 | `calendar_delete_event.py` | 删除日程 | `<event_id>`, `--yes` |
 | `calendar_freebusy.py` | 查询用户忙闲 | `--user-id` / `--openid`, `--date` |
 | `calendar_update_event.py` | 更新日程 | `<event_id>`, `--summary`, `--start`, `--end`, `--yes` |

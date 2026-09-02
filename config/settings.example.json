@@ -6,5 +6,15 @@
     "open_id": "",
     "department": "",
     "role": ""
+  },
+  "infrastructure": {
+    "bitable": {
+      "app_token": "XqA3bAtGpaWjflsryxfcadp7nmf",
+      "url": "https://xxx.feishu.cn/base/XqA3...",
+      "created_at": "2026-07-07T07:30:00Z",
+      "tables": {
+        "token_backup": "tblOflmn3KGcgUsn"
+      }
+    }
   }
 }

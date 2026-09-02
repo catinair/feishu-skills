@@ -40,7 +40,7 @@ python3 feishu-contact/contact_lookup.py --user-id your_user_id
 ### 搜索用户
 
 ```bash
-python3 feishu-contact/contact_search.py 万青
+python3 feishu-contact/contact_search.py 张三
 python3 feishu-contact/contact_search.py 张三 --limit 10
 ```
 

@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--ui-type", default=None, help="UI 类型，如 Text, Email, Phone, Url, Rating 等")
     parser.add_argument("--property", default=None, help="字段属性 JSON（如单选选项、数字格式等）")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     app_token, table_id = extract_base_info(args.app)
@@ -44,7 +45,17 @@ def main():
         is_trusted=False,
     )
     result = client.base_create_field(app_token, table_id, args.name, args.type, ui_type=args.ui_type, property=property_obj)
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    field = result.get("field", result) if isinstance(result, dict) else {}
+    print_json({
+        "status": "ok",
+        "field_id": field.get("field_id", ""),
+        "field_name": field.get("field_name", ""),
+        "type": field.get("type"),
+    })
 
 
 if __name__ == "__main__":

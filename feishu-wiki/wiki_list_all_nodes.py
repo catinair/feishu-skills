@@ -2,10 +2,10 @@
 """
 wiki_list_all_nodes.py -- 递归遍历知识空间所有节点
 用法:
-  python3 wiki_list_all_nodes.py --space-id your_space_id
-  python3 wiki_list_all_nodes.py --space-id your_space_id --wiki-base-url https://example.feishu.cn
-  python3 wiki_list_all_nodes.py --space-id your_space_id --max-depth 3
-  python3 wiki_list_all_nodes.py --space-id your_space_id --filter "医药"
+  python3 wiki_list_all_nodes.py --space-id 7310041255240073220
+  python3 wiki_list_all_nodes.py --space-id 7310041255240073220 --wiki-base-url https://ying-dao.feishu.cn
+  python3 wiki_list_all_nodes.py --space-id 7310041255240073220 --max-depth 3
+  python3 wiki_list_all_nodes.py --space-id 7310041255240073220 --filter "医药"
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -58,7 +58,7 @@ def collect_nodes(client, space_id, parent_node_token=None, wiki_base_url=None,
 def main():
     parser = argparse.ArgumentParser(description="递归遍历知识空间所有节点")
     parser.add_argument("--space-id", required=True, help="知识空间 ID")
-    parser.add_argument("--wiki-base-url", help="知识库基础 URL（如 https://example.feishu.cn），用于拼接节点链接")
+    parser.add_argument("--wiki-base-url", help="知识库基础 URL（如 https://ying-dao.feishu.cn），用于拼接节点链接")
     parser.add_argument("--max-depth", type=int, help="最大遍历深度（默认无限制）")
     parser.add_argument("--filter", dest="title_filter", help="按标题过滤（仅顶层，大小写不敏感）")
     args = parser.parse_args()

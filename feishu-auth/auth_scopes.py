@@ -15,7 +15,6 @@
 """
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -24,8 +23,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from feishu_common import print_json, cli_run
 from feishu_common._endpoint_registry import ENDPOINT_REGISTRY, APP_ONLY
 from feishu_common._config_loader import (
-    resolve_config_path,
     load_credentials_data,
+    load_default_identity,
+    load_permissions_config,
 )
 
 
@@ -79,15 +79,9 @@ def _guess_domain(method_name):
 
 
 def _load_permissions():
-    """读取 permissions.json。"""
-    path = resolve_config_path("permissions.json")
-    if not path.exists():
-        return {"scopes": {"tenant": [], "user": []}, "admin_approval_scopes": []}
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        raise RuntimeError(f"读取 permissions.json 失败: {e}")
+    """读取 permissions.json（含平台 skill-root fallback）。"""
+    data = load_permissions_config()
+    return data or {"scopes": {"tenant": [], "user": []}, "admin_approval_scopes": []}
 
 
 def _load_app_id():
@@ -125,10 +119,20 @@ def _collect_domain_scopes():
     return domains
 
 
-def _build_report(permissions, domains):
-    """构建按能力域分组的权限诊断报告。"""
+def _build_report(permissions, domains, full_mode=False):
+    """构建按能力域分组的权限诊断报告。
+
+    Args:
+        permissions: 从 permissions.json 加载的权限数据
+        domains: 从 ENDPOINT_REGISTRY 聚合的能力域信息
+        full_mode: 若为 True，BOTH 端点要求 tenant + user 同时满足；
+                   若为 False（默认），根据 default_identity 判断：
+                   - user 默认时，BOTH 端点只需 user 满足
+                   - tenant 默认时，BOTH 端点只需 tenant 满足
+    """
     tenant_granted = set(permissions.get("scopes", {}).get("tenant", []))
     user_granted = set(permissions.get("scopes", {}).get("user", []))
+    default_identity = load_default_identity() if not full_mode else None
 
     report = {
         "app_id": _load_app_id(),
@@ -149,15 +153,41 @@ def _build_report(permissions, domains):
         tenant_missing = sorted(tenant_required - tenant_granted) if tenant_required else []
         user_missing = sorted(user_required - user_granted) if user_required else []
 
-        # 一个能力域"就绪"的定义：
-        # - 如果该域只有 APP_ONLY 端点：tenant 权限满足即可
-        # - 如果有 BOTH/USER_ONLY 端点：tenant 和 user 权限都满足
+        # 判断该域是否涉及 user 身份调用（BOTH 或 USER_ONLY）
         supports_user = bool(
             identities & {"user_only", "both"} and user_required
         )
-        ready = not tenant_missing
-        if supports_user:
-            ready = ready and not user_missing
+        # 判断该域是否涉及 tenant 身份调用（BOTH 或 APP_ONLY）
+        supports_tenant = bool(
+            identities & {"app_only", "both"} and tenant_required
+        )
+
+        if full_mode:
+            # 完整模式：所有支持的权限都必须满足
+            ready = not tenant_missing
+            if supports_user:
+                ready = ready and not user_missing
+        else:
+            # 根据默认身份判断 BOTH 端点
+            if "both" in identities:
+                if default_identity == "user":
+                    # 默认 user 身份：只需 user scope 满足
+                    ready = not user_missing
+                elif default_identity == "tenant":
+                    # 默认 tenant 身份：只需 tenant scope 满足
+                    ready = not tenant_missing
+                else:
+                    # 兜底：双方都要满足（与旧行为一致）
+                    ready = not tenant_missing and not user_missing
+            elif supports_user and not supports_tenant:
+                # USER_ONLY：必须 user 满足
+                ready = not user_missing
+            elif supports_tenant and not supports_user:
+                # APP_ONLY：必须 tenant 满足
+                ready = not tenant_missing
+            else:
+                # 混合或空：双方都要满足
+                ready = not tenant_missing and not user_missing
 
         report["domains"][domain] = {
             "ready": ready,
@@ -301,11 +331,16 @@ def main():
         action="store_true",
         help="以 JSON 格式输出",
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="完整视图：BOTH 端点要求 tenant + user 同时满足（默认按 default_identity 判断）",
+    )
     args = parser.parse_args()
 
     permissions = _load_permissions()
     domains = _collect_domain_scopes()
-    report = _build_report(permissions, domains)
+    report = _build_report(permissions, domains, full_mode=args.full)
 
     if args.missing:
         report = _filter_missing(report)

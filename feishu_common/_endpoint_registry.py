@@ -47,11 +47,17 @@ ENDPOINT_REGISTRY = {
     # ── Doc ──────────────────────────────────────────────────────────
     "document_info": {
         "identity": BOTH,
-        "scopes": {"tenant": ["docx:document:readonly"], "user": ["docx:document:readonly"]},
+        "scopes": {
+            "tenant": ["docx:document:readonly"],
+            "user": ["docx:document:readonly"],
+        },
     },
     "document_block_info": {
         "identity": BOTH,
-        "scopes": {"tenant": ["docx:document:readonly"], "user": ["docx:document:readonly"]},
+        "scopes": {
+            "tenant": ["docx:document:readonly"],
+            "user": ["docx:document:readonly"],
+        },
     },
     "document_create_child_blocks": {
         "identity": BOTH,
@@ -67,19 +73,31 @@ ENDPOINT_REGISTRY = {
     },
     "document_blocks": {
         "identity": BOTH,
-        "scopes": {"tenant": ["docx:document:readonly"], "user": ["docx:document:readonly"]},
+        "scopes": {
+            "tenant": ["docx:document:readonly"],
+            "user": ["docx:document:readonly"],
+        },
     },
     "document_blocks_all": {
         "identity": BOTH,
-        "scopes": {"tenant": ["docx:document:readonly"], "user": ["docx:document:readonly"]},
+        "scopes": {
+            "tenant": ["docx:document:readonly"],
+            "user": ["docx:document:readonly"],
+        },
     },
     "document_raw_content": {
         "identity": BOTH,
-        "scopes": {"tenant": ["docx:document:readonly"], "user": ["docx:document:readonly"]},
+        "scopes": {
+            "tenant": ["docx:document:readonly"],
+            "user": ["docx:document:readonly"],
+        },
     },
     "markdown_to_blocks": {
         "identity": BOTH,
-        "scopes": {"tenant": ["docx:document.block:convert"], "user": ["docx:document.block:convert"]},
+        "scopes": {
+            "tenant": ["docx:document.block:convert"],
+            "user": ["docx:document.block:convert"],
+        },
     },
     "insert_blocks": {
         "identity": BOTH,
@@ -91,28 +109,46 @@ ENDPOINT_REGISTRY = {
     },
     "document_comments": {
         "identity": BOTH,
-        "scopes": {"tenant": ["docs:document.comment:read"], "user": ["docs:document.comment:read"]},
+        "scopes": {
+            "tenant": ["docs:document.comment:read"],
+            "user": ["docs:document.comment:read"],
+        },
     },
     "document_comments_all": {
         "identity": BOTH,
-        "scopes": {"tenant": ["docs:document.comment:read"], "user": ["docs:document.comment:read"]},
+        "scopes": {
+            "tenant": ["docs:document.comment:read"],
+            "user": ["docs:document.comment:read"],
+        },
     },
     "document_comment_reply": {
         "identity": BOTH,
-        "scopes": {"tenant": ["docs:document.comment:create"], "user": ["docs:document.comment:create"]},
+        "scopes": {
+            "tenant": ["docs:document.comment:create"],
+            "user": ["docs:document.comment:create"],
+        },
     },
     "document_comment_create": {
         "identity": BOTH,
-        "scopes": {"tenant": ["docs:document.comment:create"], "user": ["docs:document.comment:create"]},
+        "scopes": {
+            "tenant": ["docs:document.comment:create"],
+            "user": ["docs:document.comment:create"],
+        },
     },
     # ── Drive ────────────────────────────────────────────────────────
     "list_files": {
         "identity": BOTH,
-        "scopes": {"tenant": ["drive:drive:readonly"], "user": ["drive:drive:readonly"]},
+        "scopes": {
+            "tenant": ["drive:drive:readonly"],
+            "user": ["drive:drive:readonly"],
+        },
     },
     "search_files": {
         "identity": BOTH,
-        "scopes": {"tenant": ["drive:drive:readonly"], "user": ["drive:drive:readonly"]},
+        "scopes": {
+            "tenant": ["drive:drive:readonly"],
+            "user": ["drive:drive:readonly"],
+        },
     },
     "copy_file": {
         "identity": BOTH,
@@ -140,19 +176,31 @@ ENDPOINT_REGISTRY = {
     # for identity resolution (binary streaming, can't go through _request)
     "download_file": {
         "identity": BOTH,
-        "scopes": {"tenant": ["drive:drive:readonly"], "user": ["drive:drive:readonly"]},
+        "scopes": {
+            "tenant": ["drive:drive:readonly"],
+            "user": ["drive:drive:readonly"],
+        },
     },
     "download_media": {
         "identity": BOTH,
-        "scopes": {"tenant": ["drive:drive:readonly"], "user": ["drive:drive:readonly"]},
-    },
-    "download_board": {
-        "identity": BOTH,
-        "scopes": {"tenant": ["board:whiteboard:node:read"], "user": ["board:whiteboard:node:read"]},
+        "scopes": {
+            "tenant": ["drive:drive:readonly"],
+            "user": ["drive:drive:readonly"],
+        },
     },
     "batch_get_tmp_download_url": {
         "identity": BOTH,
-        "scopes": {"tenant": ["drive:drive:readonly"], "user": ["drive:drive:readonly"]},
+        "scopes": {
+            "tenant": ["drive:drive:readonly"],
+            "user": ["drive:drive:readonly"],
+        },
+    },
+    "download_board": {
+        "identity": BOTH,
+        "scopes": {
+            "tenant": ["board:whiteboard:node:read"],
+            "user": ["board:whiteboard:node:read"],
+        },
     },
     "drive_create_export_task": {
         "identity": BOTH,
@@ -160,11 +208,17 @@ ENDPOINT_REGISTRY = {
     },
     "drive_get_export_task": {
         "identity": BOTH,
-        "scopes": {"tenant": ["drive:drive:version:readonly"], "user": ["drive:drive:version:readonly"]},
+        "scopes": {
+            "tenant": ["drive:drive:version:readonly"],
+            "user": ["drive:drive:version:readonly"],
+        },
     },
     "drive_export_download": {
         "identity": BOTH,
-        "scopes": {"tenant": ["drive:drive:version:readonly"], "user": ["drive:drive:version:readonly"]},
+        "scopes": {
+            "tenant": ["drive:drive:version:readonly"],
+            "user": ["drive:drive:version:readonly"],
+        },
     },
     "drive_export": {
         "identity": BOTH,
@@ -173,11 +227,17 @@ ENDPOINT_REGISTRY = {
     # ── Sheets ───────────────────────────────────────────────────────
     "sheet_create": {
         "identity": BOTH,
-        "scopes": {"tenant": ["sheets:spreadsheet:create"], "user": ["sheets:spreadsheet:create"]},
+        "scopes": {
+            "tenant": ["sheets:spreadsheet:create"],
+            "user": ["sheets:spreadsheet:create"],
+        },
     },
     "sheet_get_info": {
         "identity": BOTH,
-        "scopes": {"tenant": ["sheets:spreadsheet"], "user": ["sheets:spreadsheet.meta:read"]},
+        "scopes": {
+            "tenant": ["sheets:spreadsheet"],
+            "user": ["sheets:spreadsheet.meta:read"],
+        },
     },
     "sheet_read": {
         "identity": BOTH,
@@ -211,60 +271,85 @@ ENDPOINT_REGISTRY = {
     # ── Calendar ─────────────────────────────────────────────────────
     "calendar_list_events": {
         "identity": BOTH,
-        "scopes": {"tenant": ["calendar:calendar.event:read"], "user": ["calendar:calendar.event:read"]},
+        "scopes": {
+            "tenant": ["calendar:calendar.event:read"],
+            "user": ["calendar:calendar.event:read"],
+        },
     },
     "calendar_get_event": {
         "identity": BOTH,
-        "scopes": {"tenant": ["calendar:calendar.event:read"], "user": ["calendar:calendar.event:read"]},
+        "scopes": {
+            "tenant": ["calendar:calendar.event:read"],
+            "user": ["calendar:calendar.event:read"],
+        },
     },
     "calendar_create_event": {
         "identity": BOTH,
-        "scopes": {"tenant": ["calendar:calendar.event:create"], "user": ["calendar:calendar.event:create"]},
+        "scopes": {
+            "tenant": ["calendar:calendar.event:create"],
+            "user": ["calendar:calendar.event:create"],
+        },
     },
     "calendar_delete_event": {
         "identity": BOTH,
-        "scopes": {"tenant": ["calendar:calendar.event:read"], "user": ["calendar:calendar.event:delete"]},
+        "scopes": {
+            "tenant": ["calendar:calendar.event:read"],
+            "user": ["calendar:calendar.event:delete"],
+        },
     },
     "calendar_freebusy": {
         "identity": BOTH,
-        "scopes": {"tenant": ["calendar:timeoff"], "user": ["calendar:calendar.free_busy:read"]},
+        "scopes": {
+            "tenant": ["calendar:timeoff"],
+            "user": ["calendar:calendar.free_busy:read"],
+        },
     },
     "calendar_update_event": {
         "identity": BOTH,
-        "scopes": {"tenant": ["calendar:calendar.event:update"], "user": ["calendar:calendar.event:update"]},
+        "scopes": {
+            "tenant": ["calendar:calendar.event:update"],
+            "user": ["calendar:calendar.event:update"],
+        },
     },
     "calendar_list_calendars": {
         "identity": BOTH,
-        "scopes": {"tenant": ["calendar:calendar:read"], "user": ["calendar:calendar:read"]},
+        "scopes": {"tenant": ["calendar:calendar"], "user": ["calendar:calendar:read"]},
+    },
+    "calendar_subscribe": {
+        "identity": BOTH,
+        "scopes": {
+            "tenant": ["calendar:calendar:subscribe"],
+            "user": ["calendar:calendar:subscribe"],
+        },
     },
     # ── IM ───────────────────────────────────────────────────────────
     "im_create_chat": {
-        "identity": BOTH,
-        "scopes": {"tenant": ["im:chat:create"], "user": ["im:chat:create"]},
+        "identity": APP_ONLY,
+        "scopes": {"tenant": ["im:chat"], "user": []},
     },
     "im_send_text": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message.send_as_user"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message"]},
     },
     "im_send_post": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message.send_as_user"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message"]},
     },
     "im_messages_list": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:readonly"], "user": ["im:message:readonly"]},
+        "scopes": {"tenant": ["im:message:readonly"], "user": ["im:message"]},
     },
     "im_reply_message": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message.send_as_user"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message"]},
     },
     "im_send_file": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message.send_as_user"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message"]},
     },
     "im_send_image": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message.send_as_user"]},
+        "scopes": {"tenant": ["im:message:send_as_bot"], "user": ["im:message"]},
     },
     "upload_image": {
         "identity": APP_ONLY,
@@ -284,7 +369,7 @@ ENDPOINT_REGISTRY = {
     },
     "im_chat_update": {
         "identity": BOTH,
-        "scopes": {"tenant": ["im:chat:update"], "user": ["im:chat:update"]},
+        "scopes": {"tenant": ["im:chat"], "user": ["im:chat"]},
     },
     "im_search_messages": {
         "identity": USER_ONLY,
@@ -294,14 +379,24 @@ ENDPOINT_REGISTRY = {
         "identity": BOTH,
         "scopes": {"tenant": ["im:chat:readonly"], "user": ["im:chat"]},
     },
+    "im_search_chats": {
+        "identity": BOTH,
+        "scopes": {"tenant": ["im:chat:readonly"], "user": ["im:chat"]},
+    },
     # ── Minutes ──────────────────────────────────────────────────────
     "minutes_get": {
         "identity": BOTH,
-        "scopes": {"tenant": ["minutes:minutes:readonly"], "user": ["minutes:minutes.basic:read"]},
+        "scopes": {
+            "tenant": ["minutes:minutes:readonly"],
+            "user": ["minutes:minutes.basic:read"],
+        },
     },
     "minutes_transcript": {
         "identity": BOTH,
-        "scopes": {"tenant": ["minutes:minutes.transcript:export"], "user": ["minutes:minutes.artifacts:read"]},
+        "scopes": {
+            "tenant": ["minutes:minutes.transcript:export"],
+            "user": ["minutes:minutes.artifacts:read"],
+        },
     },
     "minutes_statistics": {
         "identity": APP_ONLY,
@@ -309,7 +404,10 @@ ENDPOINT_REGISTRY = {
     },
     "minutes_artifacts": {
         "identity": BOTH,
-        "scopes": {"tenant": ["minutes:minutes:readonly"], "user": ["minutes:minutes.artifacts:read"]},
+        "scopes": {
+            "tenant": ["minutes:minutes:readonly"],
+            "user": ["minutes:minutes.artifacts:read"],
+        },
     },
     # ── Contact ──────────────────────────────────────────────────────
     "contact_search_users": {
@@ -318,11 +416,17 @@ ENDPOINT_REGISTRY = {
     },
     "contact_list_departments": {
         "identity": BOTH,
-        "scopes": {"tenant": ["contact:department.base:readonly"], "user": ["contact:department.base:readonly"]},
+        "scopes": {
+            "tenant": ["contact:department.base:readonly"],
+            "user": ["contact:department.base:readonly"],
+        },
     },
     "contact_get_department": {
         "identity": BOTH,
-        "scopes": {"tenant": ["contact:department.base:readonly"], "user": ["contact:department.base:readonly"]},
+        "scopes": {
+            "tenant": ["contact:department.base:readonly"],
+            "user": ["contact:department.base:readonly"],
+        },
     },
     "contact_list_department_members": {
         "identity": USER_ONLY,
@@ -330,11 +434,17 @@ ENDPOINT_REGISTRY = {
     },
     "contact_find_by_department": {
         "identity": BOTH,
-        "scopes": {"tenant": ["contact:user.base:readonly"], "user": ["contact:user.base:readonly"]},
+        "scopes": {
+            "tenant": ["contact:user.base:readonly"],
+            "user": ["contact:user.base:readonly"],
+        },
     },
     "contact_get_user": {
         "identity": BOTH,
-        "scopes": {"tenant": ["contact:contact.base:readonly"], "user": ["contact:contact.base:readonly"]},
+        "scopes": {
+            "tenant": ["contact:contact.base:readonly"],
+            "user": ["contact:contact.base:readonly"],
+        },
     },
     "contact_get_self": {
         "identity": USER_ONLY,
@@ -347,15 +457,24 @@ ENDPOINT_REGISTRY = {
     # ── Perm ─────────────────────────────────────────────────────────
     "perm_list_members": {
         "identity": BOTH,
-        "scopes": {"tenant": ["docs:permission.member:readonly"], "user": ["docs:permission.member:readonly"]},
+        "scopes": {
+            "tenant": ["docs:permission.member:readonly"],
+            "user": ["docs:permission.member:readonly"],
+        },
     },
     "perm_add_member": {
         "identity": BOTH,
-        "scopes": {"tenant": ["docs:permission.member:create"], "user": ["docs:permission.member:create"]},
+        "scopes": {
+            "tenant": ["docs:permission.member:create"],
+            "user": ["docs:permission.member:create"],
+        },
     },
     "perm_remove_member": {
         "identity": BOTH,
-        "scopes": {"tenant": ["docs:permission.member"], "user": ["docs:permission.member"]},
+        "scopes": {
+            "tenant": ["docs:permission.member"],
+            "user": ["docs:permission.member"],
+        },
     },
     # ── Base ─────────────────────────────────────────────────────────
     "base_create": {
@@ -516,11 +635,17 @@ ENDPOINT_REGISTRY = {
     },
     "base_upload_attachment": {
         "identity": BOTH,
-        "scopes": {"tenant": ["bitable:app", "drive:file:upload"], "user": ["bitable:app"]},
+        "scopes": {
+            "tenant": ["bitable:app", "drive:file:upload"],
+            "user": ["bitable:app"],
+        },
     },
     "base_download_attachments": {
         "identity": BOTH,
-        "scopes": {"tenant": ["bitable:app", "drive:drive:readonly"], "user": ["bitable:app"]},
+        "scopes": {
+            "tenant": ["bitable:app", "drive:drive:readonly"],
+            "user": ["bitable:app"],
+        },
     },
     # ── Task ─────────────────────────────────────────────────────────
     "task_create": {

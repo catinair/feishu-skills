@@ -13,6 +13,7 @@ def main():
     parser.add_argument("--title", help="文档标题")
     parser.add_argument("--folder-token", default=DEFAULT_FOLDER_TOKEN, help="父文件夹 token（可选，默认指定文件夹）")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     client = create_client()
@@ -23,7 +24,16 @@ def main():
         is_trusted=is_trusted_folder(args.folder_token),
     )
     result = client.document_create(title=args.title, folder_token=args.folder_token)
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    doc = result if isinstance(result, dict) else {}
+    print_json({
+        "status": "ok",
+        "document_id": doc.get("document_id", ""),
+        "title": doc.get("title", ""),
+    })
 
 if __name__ == "__main__":
     cli_run(main)

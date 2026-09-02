@@ -3,11 +3,41 @@
 _client_task.py -- 飞书任务 API v2 mixin
 """
 
-class TaskMixin:
 
-    def task_create(self, summary, description=None, due=None, members=None,
-                    extra=None, origin=None, mode=None, reminders=None,
-                    tasklists=None, client_token=None, user_id_type="open_id"):
+class TaskMixin:
+    @staticmethod
+    def _to_query_timestamp(value):
+        """将秒级时间戳或 ISO 字符串转换为查询参数所需的秒级时间戳字符串。"""
+        import datetime
+
+        if isinstance(value, int) or isinstance(value, float):
+            return str(int(value))
+        if isinstance(value, str) and value.isdigit():
+            return str(int(value))
+        if isinstance(value, str):
+            ts = value
+            if ts.endswith("Z"):
+                ts = ts[:-1] + "+00:00"
+            try:
+                return str(int(datetime.datetime.fromisoformat(ts).timestamp()))
+            except ValueError:
+                return value
+        return str(value)
+
+    def task_create(
+        self,
+        summary,
+        description=None,
+        due=None,
+        members=None,
+        extra=None,
+        origin=None,
+        mode=None,
+        reminders=None,
+        tasklists=None,
+        client_token=None,
+        user_id_type="open_id",
+    ):
         """创建飞书任务
 
         Args:
@@ -60,11 +90,20 @@ class TaskMixin:
             dict: 任务对象（含 guid, summary, status, members, comments 等）
         """
         query = {"user_id_type": user_id_type}
-        data = self._request("GET", f"/open-apis/task/v2/tasks/{task_guid}", query=query)
+        data = self._request(
+            "GET", f"/open-apis/task/v2/tasks/{task_guid}", query=query
+        )
         return data.get("task", data)
 
-    def task_list(self, completed=None, page_size=50, max_results=None,
-                  user_id_type="open_id"):
+    def task_list(
+        self,
+        completed=None,
+        page_size=50,
+        max_results=None,
+        user_id_type="open_id",
+        start_time=None,
+        end_time=None,
+    ):
         """列取当前用户负责的任务（仅支持 user_access_token）
 
         Args:
@@ -72,6 +111,8 @@ class TaskMixin:
             page_size: 每页数量（1-100）
             max_results: 最大返回条数
             user_id_type: 用户 ID 类型
+            start_time: 创建时间起点（秒级时间戳或 ISO 字符串）
+            end_time: 创建时间终点（秒级时间戳或 ISO 字符串）
 
         Returns:
             dict: {"total": int, "items": [...], "has_more": bool}
@@ -79,15 +120,22 @@ class TaskMixin:
         extra_query = {"type": "my_tasks", "user_id_type": user_id_type}
         if completed is not None:
             extra_query["completed"] = "true" if completed else "false"
+        if start_time is not None:
+            extra_query["start_time"] = self._to_query_timestamp(start_time)
+        if end_time is not None:
+            extra_query["end_time"] = self._to_query_timestamp(end_time)
         items = self._paginate(
-            "GET", "/open-apis/task/v2/tasks",
-            page_size=page_size, max_results=max_results,
+            "GET",
+            "/open-apis/task/v2/tasks",
+            page_size=page_size,
+            max_results=max_results,
             extra_query=extra_query,
         )
         return {"total": len(items), "items": items, "has_more": False}
 
-    def task_patch(self, task_guid, update_fields, task_data=None,
-                   user_id_type="open_id"):
+    def task_patch(
+        self, task_guid, update_fields, task_data=None, user_id_type="open_id"
+    ):
         """更新任务（标题、描述、截止时间、完成状态等）
 
         Args:
@@ -106,14 +154,19 @@ class TaskMixin:
         if task_data is not None:
             body["task"] = task_data
         query = {"user_id_type": user_id_type}
-        data = self._request("PATCH", f"/open-apis/task/v2/tasks/{task_guid}",
-                             body=body, query=query)
+        data = self._request(
+            "PATCH", f"/open-apis/task/v2/tasks/{task_guid}", body=body, query=query
+        )
         return data.get("task", data)
 
-    def task_comment_create(self, resource_id, content,
-                            reply_to_comment_id=None,
-                            resource_type="task",
-                            user_id_type="open_id"):
+    def task_comment_create(
+        self,
+        resource_id,
+        content,
+        reply_to_comment_id=None,
+        resource_type="task",
+        user_id_type="open_id",
+    ):
         """为任务创建评论
 
         Args:
@@ -134,13 +187,20 @@ class TaskMixin:
         if reply_to_comment_id is not None:
             body["reply_to_comment_id"] = reply_to_comment_id
         query = {"user_id_type": user_id_type}
-        data = self._request("POST", "/open-apis/task/v2/comments",
-                             body=body, query=query)
+        data = self._request(
+            "POST", "/open-apis/task/v2/comments", body=body, query=query
+        )
         return data.get("comment", data)
 
-    def task_comment_list(self, resource_id, resource_type="task",
-                          direction="asc", page_size=50, max_results=None,
-                          user_id_type="open_id"):
+    def task_comment_list(
+        self,
+        resource_id,
+        resource_type="task",
+        direction="asc",
+        page_size=50,
+        max_results=None,
+        user_id_type="open_id",
+    ):
         """获取任务的评论列表
 
         Args:
@@ -161,8 +221,10 @@ class TaskMixin:
             "user_id_type": user_id_type,
         }
         items = self._paginate(
-            "GET", "/open-apis/task/v2/comments",
-            page_size=page_size, max_results=max_results,
+            "GET",
+            "/open-apis/task/v2/comments",
+            page_size=page_size,
+            max_results=max_results,
             extra_query=extra_query,
         )
         return {"total": len(items), "items": items, "has_more": False}

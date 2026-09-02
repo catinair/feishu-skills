@@ -7,28 +7,57 @@ description: |
 metadata:
   requires:
     bins: ["python3"]
-    files: ["feishu-im/im_send_message.py", "feishu-im/im_list_chats.py", "feishu-im/im_create_chat.py", "feishu-im/im_upload_image.py", "feishu-im/im_chat_info.py", "feishu-im/im_chat_members.py", "feishu-im/im_chat_add_members.py", "feishu-im/im_chat_update.py", "feishu-im/im_messages_search.py", "feishu-im/im_messages_list.py", "feishu-im/im_messages_reply.py", "config/credentials.json"]
+    files: ["feishu-im/im_send_message.py", "feishu-im/im_list_chats.py", "feishu-im/im_search_chats.py", "feishu-im/im_create_chat.py", "feishu-im/im_upload_image.py", "feishu-im/im_chat_info.py", "feishu-im/im_chat_members.py", "feishu-im/im_chat_add_members.py", "feishu-im/im_chat_update.py", "feishu-im/im_messages_search.py", "feishu-im/im_messages_list.py", "feishu-im/im_messages_reply.py", "config/credentials.json"]
 ---
 
 # feishu-im -- 飞书 IM 技能
 
 ## 权限要求
 
-> **说明**：以下标注的审批要求基于常见企业配置。实际是否需要管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
+| 脚本 | 所需权限 | 身份支持 | 状态 |
+|------|---------|----------|------|
+| im_send_message.py | `im:message`（user）或 `im:message:send_as_bot`（tenant/app） | `user` / `tenant` | 已开通 |
+| im_list_chats.py | `im:chat:readonly` | `both` | 已开通 |
+| im_search_chats.py | `im:chat`（user）或 `im:chat:readonly`（tenant） | `both` | 已开通 |
+| im_create_chat.py | `im:chat` | `app_only` | 已开通 |
+| im_upload_image.py | `im:resource` | `app_only` | 已开通 |
+| im_chat_info.py | `im:chat:readonly` | `both` | 已开通 |
+| im_chat_members.py | `im:chat:readonly` 或 `im:chat.members:read` | `both` | 已开通 |
+| im_chat_add_members.py | `im:chat:member:operate` 或 `im:chat` | `both` | 需确认 |
+| im_chat_update.py | `im:chat` | `both` | 已开通 |
+| im_messages_search.py | `search:message` / `contact:user.basic_profile:readonly` | `user_only` | **需申请** |
+| im_messages_list.py | `im:message`（user）或 `im:message:readonly`（tenant） | `both` | 已开通 |
+| im_messages_reply.py | `im:message`（user）或 `im:message:send_as_bot`（tenant） | `both` | 已开通 |
 
-| 脚本 | 所需权限 | 审批说明 |
-|------|---------|----------|
-| im_send_message.py | `im:message:send_as_bot` | 一般无需管理员审批 |
-| im_list_chats.py | `im:chat:readonly` | 一般无需管理员审批 |
-| im_create_chat.py | `im:chat` | 一般无需管理员审批 |
-| im_upload_image.py | `im:resource` | 一般无需管理员审批 |
-| im_chat_info.py | `im:chat:readonly` | 一般无需管理员审批 |
-| im_chat_members.py | `im:chat:readonly` 或 `im:chat.members:read` | 一般无需管理员审批 |
-| im_chat_add_members.py | `im:chat:member:operate` 或 `im:chat` | 一般无需管理员审批 |
-| im_chat_update.py | `im:chat` | 一般无需管理员审批 |
-| im_messages_search.py | `search:message` / `contact:user.basic_profile:readonly` | 通常需管理员审批 |
-| im_messages_list.py | `im:message:readonly` | 一般无需管理员审批 |
-| im_messages_reply.py | `im:message` | 一般无需管理员审批 |
+## 身份说明
+
+IM 发送/回复类脚本支持两种调用身份：
+
+- **user 身份（默认）**：消息以当前授权用户个人身份发出，`sender.sender_type = "user"`。需要 user scope `im:message`。
+- **tenant/app 身份**：消息以应用机器人身份发出，`sender.sender_type = "app"`。需要 tenant scope `im:message:send_as_bot`。
+
+默认身份由 `config/settings.json` 中的 `default_identity` 控制。也可以在调用时显式指定：
+
+```bash
+# 默认按 settings.json 的 default_identity
+python3 feishu-im/im_send_message.py --receive-id oc_xxx --type chat_id --text "你好"
+
+# 强制以用户身份发送
+python3 feishu-im/im_send_message.py --receive-id oc_xxx --type chat_id --text "你好" --identity user
+
+# 强制以应用机器人身份发送
+python3 feishu-im/im_send_message.py --receive-id oc_xxx --type chat_id --text "你好" --identity tenant
+```
+
+**注意**：`im_create_chat.py` 仅支持 tenant/app 身份（飞书 API 限制），不受 `--identity user` 影响。
+
+## 输出说明
+
+写操作类 CLI（如 `im_send_message.py`、`im_chat_update.py`）默认输出精简摘要，便于 AI 消费。如需完整 API 原始响应，请加 `--raw`：
+
+```bash
+python3 feishu-im/im_send_message.py --receive-id oc_xxx --type chat_id --text "你好" --raw
+```
 
 ## 快捷命令
 
@@ -36,6 +65,19 @@ metadata:
 
 ```bash
 python3 feishu-im/im_list_chats.py
+```
+
+### 搜索群组
+
+```bash
+# 按关键字搜索（含未加入的公开群）
+python3 feishu-im/im_search_chats.py --query "全员MVP"
+
+# 仅搜索未加入的公开群
+python3 feishu-im/im_search_chats.py --query "项目" --search-types public_not_joined
+
+# 指定身份
+python3 feishu-im/im_search_chats.py --query "项目" --identity user
 ```
 
 ### 创建群聊

@@ -3,9 +3,9 @@
 wiki_create_node.py -- 在 Wiki 知识空间创建节点
 
 用法：
-    python wiki_create_node.py "会议纪要" --space your_space_id
-    python wiki_create_node.py "数据表" --space your_space_id --type sheet
-    python wiki_create_node.py "子文档" --space your_space_id --parent OUxxxxx --type docx
+    python wiki_create_node.py "会议纪要" --space 7310041255240073220
+    python wiki_create_node.py "数据表" --space 7310041255240073220 --type sheet
+    python wiki_create_node.py "子文档" --space 7310041255240073220 --parent OUxxxxx --type docx
 
 支持的 obj_type：docx（默认）、sheet、bitable、mindnote、slides
 """
@@ -25,8 +25,6 @@ def main():
     parser.add_argument("--type", default="docx", choices=["docx", "sheet", "bitable", "mindnote", "slides"],
                         help="节点类型，默认 docx")
     parser.add_argument("--parent", help="父节点 token（不传则创建在根目录）")
-    parser.add_argument("--wiki-base-url", default="https://example.feishu.cn",
-                        help="知识库基础 URL（默认 https://example.feishu.cn）")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
     args = parser.parse_args()
 
@@ -52,7 +50,7 @@ def main():
         "obj_type": node.get("obj_type", ""),
         "space_id": node.get("space_id", ""),
         "parent_node_token": node.get("parent_node_token", ""),
-        "url": f"{args.wiki_base_url.rstrip('/')}/wiki/{node.get('node_token', '')}",
+        "url": f"https://ying-dao.feishu.cn/wiki/{node.get('node_token', '')}",
     })
 
 

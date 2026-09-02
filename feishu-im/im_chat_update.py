@@ -18,6 +18,7 @@ def main():
     parser.add_argument("--name", help="新群名")
     parser.add_argument("--description", help="新群描述")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     kwargs = {}
@@ -39,7 +40,18 @@ def main():
         is_trusted=is_trusted_chat(args.chat_id),
     )
     result = client.im_chat_update(args.chat_id, **kwargs)
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    data = result.get("data", result) if isinstance(result, dict) else {}
+    chat = data.get("chat", data) if isinstance(data, dict) else {}
+    print_json({
+        "status": "ok",
+        "chat_id": chat.get("chat_id", args.chat_id),
+        "name": chat.get("name", ""),
+        "description": chat.get("description", ""),
+    })
 
 
 if __name__ == "__main__":

@@ -36,7 +36,16 @@ def main():
     if args.raw:
         print_json(result)
         return
-    print_json(result)
+
+    data = result.get("data", result) if isinstance(result, dict) else {}
+    print_json({
+        "status": "ok",
+        "token": args.token,
+        "type": args.type,
+        "member_id": data.get("member_id", args.member_id),
+        "member_type": data.get("member_type", args.member_type),
+        "perm": data.get("perm", args.perm),
+    })
 
 
 if __name__ == "__main__":

@@ -1,72 +1,118 @@
 #!/usr/bin/env python3
 """_client_base.py -- 多维表格相关 API mixin。"""
+
 import os
 
+
 class BaseMixin:
-    def base_create(self, name, folder_token=None):
+    def base_create(self, name, folder_token=None, use_user_token=None):
         """创建多维表格"""
         body = {"name": name}
         if folder_token:
             body["folder_token"] = folder_token
-        data = self._request("POST", "/open-apis/bitable/v1/apps", body=body)
+        data = self._request(
+            "POST",
+            "/open-apis/bitable/v1/apps",
+            body=body,
+            use_user_token=use_user_token,
+        )
         return data.get("app", {})
 
-    def base_list_tables(self, app_token, max_results=None):
+    def base_list_tables(self, app_token, max_results=None, use_user_token=None):
         """列出多维表格中的所有数据表"""
-        tables = self._paginate("GET", f"/open-apis/bitable/v1/apps/{app_token}/tables", max_results=max_results)
+        tables = self._paginate(
+            "GET",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables",
+            max_results=max_results,
+            use_user_token=use_user_token,
+        )
         return {"total": len(tables), "items": tables, "has_more": False}
 
-    def base_query_records(self, app_token, table_id, page_size=500, filter_expr=None, max_results=None):
+    def base_query_records(
+        self,
+        app_token,
+        table_id,
+        page_size=500,
+        filter_expr=None,
+        max_results=None,
+        use_user_token=None,
+    ):
         """查询数据表记录（自动分页）"""
         extra_query = {"filter": filter_expr} if filter_expr else None
         records = self._paginate(
-            "GET", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records",
-            page_size=page_size, max_results=max_results, extra_query=extra_query,
+            "GET",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records",
+            page_size=page_size,
+            max_results=max_results,
+            extra_query=extra_query,
+            use_user_token=use_user_token,
         )
         return {"total": len(records), "records": records}
 
-    def base_create_record(self, app_token, table_id, fields):
+    def base_create_record(self, app_token, table_id, fields, use_user_token=None):
         """创建单条记录"""
         data = self._request(
-            "POST", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records",
-            body={"fields": fields}
+            "POST",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records",
+            body={"fields": fields},
+            use_user_token=use_user_token,
         )
         return data.get("record", {})
 
-    def base_update_record(self, app_token, table_id, record_id, fields):
+    def base_update_record(
+        self, app_token, table_id, record_id, fields, use_user_token=None
+    ):
         """更新单条记录"""
         data = self._request(
-            "PUT", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}",
-            body={"fields": fields}
+            "PUT",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}",
+            body={"fields": fields},
+            use_user_token=use_user_token,
         )
         return data.get("record", {})
 
-    def base_delete_record(self, app_token, table_id, record_id):
+    def base_delete_record(self, app_token, table_id, record_id, use_user_token=None):
         """删除单条记录"""
-        self._request("DELETE", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}")
+        self._request(
+            "DELETE",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}",
+            use_user_token=use_user_token,
+        )
         return {"deleted": True, "record_id": record_id}
 
-    def base_get(self, app_token):
+    def base_get(self, app_token, use_user_token=None):
         """获取多维表格信息"""
-        return self._request("GET", f"/open-apis/bitable/v1/apps/{app_token}")
+        return self._request(
+            "GET",
+            f"/open-apis/bitable/v1/apps/{app_token}",
+            use_user_token=use_user_token,
+        )
 
-    def base_copy(self, app_token, name, folder_token=None):
+    def base_copy(self, app_token, name, folder_token=None, use_user_token=None):
         """复制多维表格"""
         body = {"name": name}
         if folder_token:
             body["folder_token"] = folder_token
-        data = self._request("POST", f"/open-apis/bitable/v1/apps/{app_token}/copy", body=body)
+        data = self._request(
+            "POST",
+            f"/open-apis/bitable/v1/apps/{app_token}/copy",
+            body=body,
+            use_user_token=use_user_token,
+        )
         return data.get("app", {})
 
-    def base_list_fields(self, app_token, table_id, max_results=None):
-        """列出数据表的所有字段"""
+    def base_list_fields(self, app_token, table_id, max_results=None, view_id=None):
+        """列出数据表的所有字段，可按 view_id 过滤。"""
+        extra_query = {"view_id": view_id} if view_id else None
         fields = self._paginate(
-            "GET", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/fields",
+            "GET",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/fields",
             max_results=max_results,
+            extra_query=extra_query,
         )
         return {"total": len(fields), "items": fields, "has_more": False}
 
-    def base_create_table(self, app_token, name, fields=None):
+    def base_create_table(self, app_token, name, fields=None, use_user_token=None):
         """在多维表格中创建数据表
 
         fields 格式示例：
@@ -78,12 +124,21 @@ class BaseMixin:
         body = {"table": {"name": name}}
         if fields:
             body["table"]["fields"] = fields
-        data = self._request("POST", f"/open-apis/bitable/v1/apps/{app_token}/tables", body=body)
+        data = self._request(
+            "POST",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables",
+            body=body,
+            use_user_token=use_user_token,
+        )
         return data
 
-    def base_delete_table(self, app_token, table_id):
+    def base_delete_table(self, app_token, table_id, use_user_token=None):
         """删除数据表"""
-        self._request("DELETE", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}")
+        self._request(
+            "DELETE",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}",
+            use_user_token=use_user_token,
+        )
         return {"deleted": True, "table_id": table_id}
 
     def base_batch_update_records(self, app_token, table_id, records):
@@ -96,30 +151,36 @@ class BaseMixin:
         ]
         """
         data = self._request(
-            "POST", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_update",
-            body={"records": records}
+            "POST",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_update",
+            body={"records": records},
         )
         return data.get("records", [])
 
     def base_batch_delete_records(self, app_token, table_id, record_ids):
         """批量删除记录"""
         data = self._request(
-            "POST", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_delete",
-            body={"records": record_ids}
+            "POST",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_delete",
+            body={"records": record_ids},
         )
         return {"deleted": len(record_ids), "record_ids": record_ids}
 
     def base_list_views(self, app_token, table_id, max_results=None):
         """列出数据表的所有视图"""
         views = self._paginate(
-            "GET", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/views",
+            "GET",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/views",
             max_results=max_results,
         )
         return {"total": len(views), "items": views, "has_more": False}
 
     def base_get_record(self, app_token, table_id, record_id):
         """获取单条记录详情"""
-        return self._request("GET", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}")
+        return self._request(
+            "GET",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}",
+        )
 
     def base_batch_create_records(self, app_token, table_id, records):
         """批量创建记录
@@ -128,7 +189,11 @@ class BaseMixin:
             records: [{'fields': {...}}, ...] 格式数组
         """
         body = {"records": records}
-        return self._request("POST", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_create", body=body)
+        return self._request(
+            "POST",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_create",
+            body=body,
+        )
 
     def base_get_table(self, app_token, table_id):
         """获取单个数据表信息（Bitable v1 无单表接口，通过列表过滤）"""
@@ -145,7 +210,11 @@ class BaseMixin:
         如需使用，应用需开通 base:base 相关权限。
         """
         body = {"name": name}
-        return self._request("PATCH", f"/open-apis/base/v3/bases/{app_token}/tables/{table_id}", body=body)
+        return self._request(
+            "PATCH",
+            f"/open-apis/base/v3/bases/{app_token}/tables/{table_id}",
+            body=body,
+        )
 
     def base_get_field(self, app_token, table_id, field_id):
         """获取单个字段详情（Bitable v1 无单字段接口，通过列表过滤）"""
@@ -155,7 +224,9 @@ class BaseMixin:
                 return {"field": f}
         raise RuntimeError(f"Field not found: {field_id}")
 
-    def base_create_field(self, app_token, table_id, field_name, field_type, property=None, ui_type=None):
+    def base_create_field(
+        self, app_token, table_id, field_name, field_type, property=None, ui_type=None
+    ):
         """创建字段
 
         Args:
@@ -169,9 +240,21 @@ class BaseMixin:
             body["ui_type"] = ui_type
         if property is not None:
             body["property"] = property
-        return self._request("POST", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/fields", body=body)
+        return self._request(
+            "POST",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/fields",
+            body=body,
+        )
 
-    def base_update_field(self, app_token, table_id, field_id, field_name=None, field_type=None, property=None):
+    def base_update_field(
+        self,
+        app_token,
+        table_id,
+        field_id,
+        field_name=None,
+        field_type=None,
+        property=None,
+    ):
         """更新字段
 
         Bitable v1 的 field update 必须同时传入 type，若未提供则自动获取当前字段 type。
@@ -187,11 +270,18 @@ class BaseMixin:
             # Bitable v1 必须传 type，自动获取
             field_info = self.base_get_field(app_token, table_id, field_id)
             body["type"] = field_info["field"]["type"]
-        return self._request("PUT", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/fields/{field_id}", body=body)
+        return self._request(
+            "PUT",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/fields/{field_id}",
+            body=body,
+        )
 
     def base_delete_field(self, app_token, table_id, field_id):
         """删除字段"""
-        self._request("DELETE", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/fields/{field_id}")
+        self._request(
+            "DELETE",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/fields/{field_id}",
+        )
         return {"deleted": True, "field_id": field_id}
 
     def base_create_view(self, app_token, table_id, view_name, view_type="grid"):
@@ -202,17 +292,28 @@ class BaseMixin:
             view_type: 视图类型，grid(表格)/kanban(看板)/gallery(画册)/gantt(甘特图)
         """
         body = {"view_name": view_name, "view_type": view_type}
-        return self._request("POST", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/views", body=body)
+        return self._request(
+            "POST",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/views",
+            body=body,
+        )
 
     def base_delete_view(self, app_token, table_id, view_id):
         """删除视图"""
-        self._request("DELETE", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/views/{view_id}")
+        self._request(
+            "DELETE",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/views/{view_id}",
+        )
         return {"deleted": True, "view_id": view_id}
 
     def base_rename_view(self, app_token, table_id, view_id, view_name):
         """重命名视图"""
         body = {"view_name": view_name}
-        return self._request("PATCH", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/views/{view_id}", body=body)
+        return self._request(
+            "PATCH",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/views/{view_id}",
+            body=body,
+        )
 
     def base_get_view(self, app_token, table_id, view_id):
         """获取单个视图详情（Bitable v1 无单视图接口，通过列表过滤）"""
@@ -226,11 +327,15 @@ class BaseMixin:
 
     def _base_v3_get(self, app_token, path_segment):
         """Base v3 GET 请求辅助方法"""
-        return self._request("GET", f"/open-apis/base/v3/bases/{app_token}/{path_segment}")
+        return self._request(
+            "GET", f"/open-apis/base/v3/bases/{app_token}/{path_segment}"
+        )
 
     def _base_v3_put(self, app_token, path_segment, body):
         """Base v3 PUT 请求辅助方法"""
-        return self._request("PUT", f"/open-apis/base/v3/bases/{app_token}/{path_segment}", body=body)
+        return self._request(
+            "PUT", f"/open-apis/base/v3/bases/{app_token}/{path_segment}", body=body
+        )
 
     def base_get_view_filter(self, app_token, table_id, view_id):
         """获取视图筛选条件（Base v3）"""
@@ -242,7 +347,9 @@ class BaseMixin:
         filter_config 示例:
             {"logic": "and", "conditions": [["fldStatus", "==", "Todo"]]}
         """
-        return self._base_v3_put(app_token, f"tables/{table_id}/views/{view_id}/filter", filter_config)
+        return self._base_v3_put(
+            app_token, f"tables/{table_id}/views/{view_id}/filter", filter_config
+        )
 
     def base_get_view_sort(self, app_token, table_id, view_id):
         """获取视图排序配置（Base v3）"""
@@ -257,7 +364,9 @@ class BaseMixin:
         """
         if isinstance(sort_config, list):
             sort_config = {"sort_config": sort_config}
-        return self._base_v3_put(app_token, f"tables/{table_id}/views/{view_id}/sort", sort_config)
+        return self._base_v3_put(
+            app_token, f"tables/{table_id}/views/{view_id}/sort", sort_config
+        )
 
     def base_get_view_group(self, app_token, table_id, view_id):
         """获取视图分组配置（Base v3）"""
@@ -272,15 +381,25 @@ class BaseMixin:
         """
         if isinstance(group_config, list):
             group_config = {"group_config": group_config}
-        return self._base_v3_put(app_token, f"tables/{table_id}/views/{view_id}/group", group_config)
+        return self._base_v3_put(
+            app_token, f"tables/{table_id}/views/{view_id}/group", group_config
+        )
 
     def base_get_view_visible_fields(self, app_token, table_id, view_id):
         """获取视图可见字段配置（Base v3）"""
-        return self._base_v3_get(app_token, f"tables/{table_id}/views/{view_id}/visible_fields")
+        return self._base_v3_get(
+            app_token, f"tables/{table_id}/views/{view_id}/visible_fields"
+        )
 
-    def base_set_view_visible_fields(self, app_token, table_id, view_id, visible_fields_config):
+    def base_set_view_visible_fields(
+        self, app_token, table_id, view_id, visible_fields_config
+    ):
         """设置视图可见字段配置（Base v3）"""
-        return self._base_v3_put(app_token, f"tables/{table_id}/views/{view_id}/visible_fields", visible_fields_config)
+        return self._base_v3_put(
+            app_token,
+            f"tables/{table_id}/views/{view_id}/visible_fields",
+            visible_fields_config,
+        )
 
     def base_query_data(self, app_token, dsl):
         """Base 数据查询（Base v3 JSON DSL 聚合查询）
@@ -289,9 +408,13 @@ class BaseMixin:
             dsl: 查询 DSL 对象，必须包含 dimensions 或 measures 之一
                 示例: {"dimensions": [{"field_id": "fldStatus"}], "measures": [{"field_id": "fldAmount", "aggregator": "SUM"}]}
         """
-        return self._request("POST", f"/open-apis/base/v3/bases/{app_token}/data/query", body=dsl)
+        return self._request(
+            "POST", f"/open-apis/base/v3/bases/{app_token}/data/query", body=dsl
+        )
 
-    def base_list_record_history(self, app_token, table_id, record_id, page_size=30, max_version=None):
+    def base_list_record_history(
+        self, app_token, table_id, record_id, page_size=30, max_version=None
+    ):
         """查询记录变更历史（Base v3）
 
         Args:
@@ -300,9 +423,13 @@ class BaseMixin:
         query = {"table_id": table_id, "record_id": record_id, "page_size": page_size}
         if max_version is not None:
             query["max_version"] = max_version
-        return self._request("GET", f"/open-apis/base/v3/bases/{app_token}/record_history", query=query)
+        return self._request(
+            "GET", f"/open-apis/base/v3/bases/{app_token}/record_history", query=query
+        )
 
-    def base_search_field_options(self, app_token, table_id, field_id, keyword=None, offset=0, limit=30):
+    def base_search_field_options(
+        self, app_token, table_id, field_id, keyword=None, offset=0, limit=30
+    ):
         """搜索字段的选项列表（Base v3，适用于单选/多选字段）
 
         Args:
@@ -313,9 +440,23 @@ class BaseMixin:
         query = {"offset": offset, "limit": limit}
         if keyword:
             query["query"] = keyword
-        return self._request("GET", f"/open-apis/base/v3/bases/{app_token}/tables/{table_id}/fields/{field_id}/options", query=query)
+        return self._request(
+            "GET",
+            f"/open-apis/base/v3/bases/{app_token}/tables/{table_id}/fields/{field_id}/options",
+            query=query,
+        )
 
-    def base_search_records(self, app_token, table_id, filter=None, sort=None, field_names=None, page_size=500, max_results=None):
+    def base_search_records(
+        self,
+        app_token,
+        table_id,
+        filter=None,
+        sort=None,
+        field_names=None,
+        page_size=500,
+        max_results=None,
+        use_user_token=None,
+    ):
         """高级搜索记录（支持复杂 filter/sort，自动分页）
 
         Args:
@@ -333,28 +474,43 @@ class BaseMixin:
         if field_names is not None:
             extra_body["field_names"] = field_names
         records = self._paginate(
-            "POST", f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/search",
-            page_size=page_size, max_results=max_results,
-            page_token_in="body", extra_body=extra_body or None,
+            "POST",
+            f"/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/search",
+            page_size=page_size,
+            max_results=max_results,
+            page_token_in="body",
+            extra_body=extra_body or None,
+            use_user_token=use_user_token,
         )
         return {"total": len(records), "items": records, "has_more": False}
 
-    def base_upsert_record(self, app_token, table_id, fields, record_id=None):
+    def base_upsert_record(
+        self, app_token, table_id, fields, record_id=None, use_user_token=None
+    ):
         """更新或插入记录
 
         提供 record_id 时更新，否则创建新记录。
         """
         if record_id:
-            return self.base_update_record(app_token, table_id, record_id, fields)
-        return self.base_create_record(app_token, table_id, fields)
+            return self.base_update_record(
+                app_token, table_id, record_id, fields, use_user_token=use_user_token
+            )
+        return self.base_create_record(
+            app_token, table_id, fields, use_user_token=use_user_token
+        )
 
-    def base_upload_attachment(self, app_token, table_id, record_id, field_name, file_path):
+    def base_upload_attachment(
+        self, app_token, table_id, record_id, field_name, file_path
+    ):
         """上传附件到记录的指定字段
 
         会自动合并到该字段已有的附件列表中。
         """
         import os
-        upload_result = self.upload_file(file_path, parent_type="bitable_file", parent_node=app_token)
+
+        upload_result = self.upload_file(
+            file_path, parent_type="bitable_file", parent_node=app_token
+        )
         file_token = upload_result.get("file_token")
         file_name = os.path.basename(file_path)
 
@@ -368,9 +524,13 @@ class BaseMixin:
         attachments = existing + [{"file_token": file_token, "name": file_name}]
 
         # 更新记录
-        return self.base_update_record(app_token, table_id, record_id, {field_name: attachments})
+        return self.base_update_record(
+            app_token, table_id, record_id, {field_name: attachments}
+        )
 
-    def base_download_attachments(self, app_token, table_id, record_id, field_name=None, output_dir="./downloads"):
+    def base_download_attachments(
+        self, app_token, table_id, record_id, field_name=None, output_dir="./downloads"
+    ):
         """下载记录中的附件到本地。
 
         自动识别附件字段，提取 file_token 和高级权限鉴权参数（extra），
@@ -427,19 +587,26 @@ class BaseMixin:
 
                 try:
                     saved = self.download_media(
-                        file_token, str(output), progress=True, extra=extra,
+                        file_token,
+                        str(output),
+                        progress=True,
+                        extra=extra,
                     )
-                    downloaded.append({
-                        "file_token": file_token,
-                        "name": attachment_name,
-                        "saved_path": saved,
-                    })
+                    downloaded.append(
+                        {
+                            "file_token": file_token,
+                            "name": attachment_name,
+                            "saved_path": saved,
+                        }
+                    )
                 except Exception as e:
-                    failed.append({
-                        "file_token": file_token,
-                        "name": attachment_name,
-                        "error": str(e),
-                    })
+                    failed.append(
+                        {
+                            "file_token": file_token,
+                            "name": attachment_name,
+                            "error": str(e),
+                        }
+                    )
 
         if not downloaded and not failed and field_name:
             raise RuntimeError(

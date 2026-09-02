@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--table", required=True, help="数据表 ID")
     parser.add_argument("--field", required=True, help="字段 ID")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     app_token, table_id = extract_base_info(args.app)
@@ -29,7 +30,15 @@ def main():
 
     client = create_client()
     result = client.base_delete_field(app_token, table_id, args.field)
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    print_json({
+        "status": "ok",
+        "deleted": result.get("deleted", False),
+        "field_id": result.get("field_id", args.field),
+    })
 
 
 if __name__ == "__main__":

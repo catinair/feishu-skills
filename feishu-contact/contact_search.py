@@ -3,7 +3,7 @@
 contact_search.py -- 搜索飞书用户
 
 用法：
-    python contact_search.py 万青
+    python contact_search.py 张三
     python contact_search.py 张三 --limit 10
 
 注意：

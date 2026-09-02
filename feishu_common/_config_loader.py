@@ -4,7 +4,7 @@ _config_loader.py -- feishu-skills 配置与策略统一加载入口
 
 支持本地开发与平台运行时两种模式：
 - 本地：配置存放在 <skill-root>/config/
-- 部分 Agent 平台：skill 目录可能每会话重建，配置优先存放在
+- 平台（如 OpenCode）：skill 目录可能每会话重建，配置优先存放在
   <workspace>/runtime_assets/<skill-name>/，实现跨会话持久化
 
 可通过环境变量 FEISHU_CONFIG_DIR 显式覆盖配置目录。
@@ -58,29 +58,25 @@ def skill_root():
 def _detect_platform_workspace():
     """探测平台 workspace 根目录。
 
-    判断依据：skill 根目录位于 /home/user/workspace/skills/<skill-name>/ 下，
-    且 workspace 可写。限定 /home/user/workspace 是为了避免本地开发目录
-    （如 ~/.cc-switch/skills/）因恰好包含 skills 目录而被误判为平台环境。
+    优先从 SKILL_ROOT 反向推导：
+    skill 位于 <workspace>/skills/feishu-skills/，故 workspace = SKILL_ROOT.parents[1]。
+    验证条件：workspace 下存在 runtime_assets 目录且可写。
+    无法推导时回退到已知的平台工作区路径 /home/user/fs/project。
 
+    不依赖 OPENCODE 等环境变量门控：平台指南指出新版可能不设置该变量，
+    依赖环境变量是定时炸弹，改为直接检测路径可写性。
     其他平台可通过 FEISHU_CONFIG_DIR 环境变量显式指定配置目录。
     """
     try:
-        # 环境变量门控：必须有平台标记才继续检测
-        if not (os.getenv("OPENCODE") or os.getenv("OPENCODE_CONFIG_DIR")):
-            return None
-        skill_root_resolved = SKILL_ROOT.resolve()
-        parent = skill_root_resolved.parent
-        if parent.name != "skills":
-            return None
-        workspace = parent.parent
-        # 限定已知平台 workspace 路径，避免本地目录误触发
-        if str(workspace) != "/home/user/workspace":
-            return None
-        if not workspace.exists() or not workspace.is_dir():
-            return None
-        if not os.access(str(workspace), os.W_OK):
-            return None
-        return workspace
+        # 1. 从 skill 位置反向推导 workspace 根目录
+        derived = SKILL_ROOT.parents[1]
+        if (derived / "runtime_assets").is_dir() and os.access(str(derived), os.W_OK):
+            return derived
+        # 2. 回退到已知平台工作区路径
+        known = Path("/home/user/fs/project")
+        if known.is_dir() and os.access(str(known), os.W_OK):
+            return known
+        return None
     except Exception:
         return None
 
@@ -120,6 +116,28 @@ def get_runtime_config_dir():
     return _migrate_legacy_runtime_dir(workspace)
 
 
+def get_config_dir(*, for_write=False):
+    """返回当前应使用的配置目录。
+
+    优先级：
+    1. FEISHU_CONFIG_DIR 环境变量
+    2. 平台运行时目录（平台环境下 for_write=True 时会自动创建）
+    3. <skill-root>/config/
+    """
+    env_dir = os.environ.get(FEISHU_CONFIG_DIR_ENV)
+    if env_dir:
+        return Path(env_dir)
+
+    runtime_dir = get_runtime_config_dir()
+    if runtime_dir:
+        if for_write:
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            return runtime_dir
+        return runtime_dir
+
+    return SKILL_ROOT / "config"
+
+
 def get_config_context():
     """返回当前 canonical 配置目录及来源。
 
@@ -147,28 +165,6 @@ def get_config_context():
         "source": "skill_root",
         "is_platform": False,
     }
-
-
-def get_config_dir(*, for_write=False):
-    """返回当前应使用的配置目录。
-
-    优先级：
-    1. FEISHU_CONFIG_DIR 环境变量
-    2. 平台运行时目录（平台环境下 for_write=True 时会自动创建）
-    3. <skill-root>/config/
-    """
-    env_dir = os.environ.get(FEISHU_CONFIG_DIR_ENV)
-    if env_dir:
-        return Path(env_dir)
-
-    runtime_dir = get_runtime_config_dir()
-    if runtime_dir:
-        if for_write:
-            runtime_dir.mkdir(parents=True, exist_ok=True)
-            return runtime_dir
-        return runtime_dir
-
-    return SKILL_ROOT / "config"
 
 
 def resolve_config_path(filename, *, for_write=False):
@@ -204,27 +200,50 @@ def resolve_config_path(filename, *, for_write=False):
 
 
 def safe_write_json(path, data, *, mode=0o644):
-    """原子写入 JSON 文件，写完后替换原文件。
+    """安全写入 JSON 文件。
 
+    优先使用 os.replace 原子替换；在某些 overlay 文件系统上，os.replace
+    会静默失败（文件 Birth 时间更新但内容未变），此时回退到直接写入。
     对 credentials.json 默认使用 600 权限，其他文件默认 644。
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
+    content = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
     # 在同一文件系统上创建临时文件，保证 os.replace 原子
     fd, tmp_path = tempfile.mkstemp(
         suffix=".tmp", prefix=path.name + ".", dir=str(path.parent)
     )
+    tmp_path_obj = Path(tmp_path)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-            f.write("\n")
+            f.write(content)
         os.chmod(tmp_path, mode)
         os.replace(tmp_path, path)
     except Exception:
-        if Path(tmp_path).exists():
-            Path(tmp_path).unlink()
+        if tmp_path_obj.exists():
+            tmp_path_obj.unlink()
         raise
+
+    # 校验 os.replace 是否真正写入了内容（overlay FS 兼容）
+    try:
+        if not path.exists():
+            raise RuntimeError("file missing after os.replace")
+        with open(path, "r", encoding="utf-8") as f:
+            if f.read() != content:
+                raise RuntimeError("content unchanged after os.replace")
+    except Exception as verify_err:
+        print(
+            f"safe_write_json: 检测到 os.replace 未更新 {path}，回退到直接写入: {verify_err}",
+            file=sys.stderr,
+        )
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+            os.chmod(path, mode)
+        except Exception:
+            raise verify_err from None
 
 
 def resolve_token_cache_path(*, for_write=False):
@@ -271,16 +290,20 @@ def append_token_history(record):
             f.flush()
             os.fsync(f.fileno())
     except Exception as e:
+        # 历史记录失败不能影响 token 刷新主流程，但应留下痕迹便于排查
         print(
             f"token_history_append_failed: {e}",
             file=sys.stderr,
         )
         return
 
-    # 首次创建文件时设置 600 权限
+    # 首次创建文件时设置 600 权限；已存在则不再修改
     try:
-        if path.stat().st_size == len(line.encode("utf-8")) or path.stat().st_size == 0:
-            os.chmod(path, 0o600)
+        if path.exists() and path.stat().st_nlink == 1:
+            # 简单判断：如果文件大小刚好等于本次写入行长度，说明是新建文件
+            # （追加模式下创建的文件第一次写入后大小等于该行长度）
+            if path.stat().st_size == len(line.encode("utf-8")):
+                os.chmod(path, 0o600)
     except Exception:
         pass
 
@@ -437,17 +460,29 @@ def get_default_folder_token():
 
 def trusted_folder_tokens():
     workspace = load_risk_policy().get("workspace", {})
-    return {item.get("token") for item in workspace.get("trusted_folder_tokens", []) if item.get("token")}
+    return {
+        item.get("token")
+        for item in workspace.get("trusted_folder_tokens", [])
+        if item.get("token")
+    }
 
 
 def trusted_user_ids():
     messaging = load_risk_policy().get("messaging", {})
-    return {item.get("user_id") for item in messaging.get("trusted_users", []) if item.get("user_id")}
+    return {
+        item.get("user_id")
+        for item in messaging.get("trusted_users", [])
+        if item.get("user_id")
+    }
 
 
 def trusted_chat_ids():
     messaging = load_risk_policy().get("messaging", {})
-    return {item.get("chat_id") for item in messaging.get("trusted_chats", []) if item.get("chat_id")}
+    return {
+        item.get("chat_id")
+        for item in messaging.get("trusted_chats", [])
+        if item.get("chat_id")
+    }
 
 
 def is_trusted_folder(folder_token):
@@ -530,7 +565,9 @@ def prompt_for_strong_confirmation(message):
     用于 manual_only 等高风险操作，避免误触普通 y/yes 确认。
     """
     print(message, file=sys.stderr)
-    print("此操作被标记为手动优先 / 高风险，如需继续请输入 YES（大写）:", file=sys.stderr)
+    print(
+        "此操作被标记为手动优先 / 高风险，如需继续请输入 YES（大写）:", file=sys.stderr
+    )
     resp = input().strip()
     return resp == "YES"
 

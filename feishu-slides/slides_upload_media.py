@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--path", required=True, help="本地图片路径（最大 20MB）")
     parser.add_argument("--presentation", required=True, help="幻灯片 token 或 URL")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     # 从 URL 提取 token
@@ -38,7 +39,15 @@ def main():
         is_trusted=False,
     )
     result = client.slides_upload_media(args.path, presentation_token)
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    print_json({
+        "status": "ok",
+        "media_id": result.get("media_id", ""),
+        "presentation_token": presentation_token,
+    })
 
 
 if __name__ == "__main__":

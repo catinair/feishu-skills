@@ -15,6 +15,7 @@ def main():
     parser.add_argument("--type", required=True, help="文件类型：docx/sheet/bitable/file/doc/mindnote/slides")
     parser.add_argument("--folder-token", default=DEFAULT_FOLDER_TOKEN, help="目标文件夹 token（可选，默认指定文件夹）")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     client = create_client()
@@ -25,7 +26,17 @@ def main():
         is_trusted=is_trusted_folder(args.folder_token),
     )
     result = client.copy_file(args.file_token, args.name, args.type, args.folder_token)
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    file_info = result if isinstance(result, dict) else {}
+    print_json({
+        "status": "ok",
+        "file_token": file_info.get("token", ""),
+        "name": file_info.get("name", ""),
+        "type": file_info.get("type", ""),
+    })
 
 if __name__ == "__main__":
     cli_run(main)

@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--name", required=True, help="视图名称")
     parser.add_argument("--type", default="grid", help="视图类型: grid/kanban/gallery/gantt（默认 grid）")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     app_token, table_id = extract_base_info(args.app)
@@ -36,7 +37,18 @@ def main():
         is_trusted=False,
     )
     result = client.base_create_view(app_token, table_id, args.name, args.type)
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    data = result.get("data", result) if isinstance(result, dict) else {}
+    view = data.get("view", data) if isinstance(data, dict) else {}
+    print_json({
+        "status": "ok",
+        "view_id": view.get("view_id", ""),
+        "view_name": view.get("view_name", ""),
+        "view_type": view.get("view_type", ""),
+    })
 
 
 if __name__ == "__main__":

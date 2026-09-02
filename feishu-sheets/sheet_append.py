@@ -15,6 +15,7 @@ def main():
     parser.add_argument("--token", required=True, help="表格 token")
     parser.add_argument("--sheet", required=True, help="sheet ID")
     parser.add_argument("--values", required=True, help="二维数组 JSON 字符串")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
     args = parser.parse_args()
 
@@ -24,7 +25,17 @@ def main():
 
     client = create_client()
     result = client.sheet_append(args.token, args.sheet, values)
-    print_json(result)
+
+    if args.raw:
+        print_json(result)
+        return
+
+    print_json({
+        "status": "ok",
+        "spreadsheetToken": result.get("spreadsheetToken", ""),
+        "sheetId": result.get("sheetId", ""),
+        "range": result.get("range", ""),
+    })
 
 if __name__ == "__main__":
     cli_run(main)

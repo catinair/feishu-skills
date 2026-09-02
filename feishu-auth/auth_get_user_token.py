@@ -12,13 +12,27 @@ auth_get_user_token.py -- 获取飞书 user_access_token（OAuth2 授权码模�
     python auth_get_user_token.py --redirect-uri http://localhost:19876/callback
     python auth_get_user_token.py --minimal               # 仅请求 offline_access
     python auth_get_user_token.py --scope "im:message im:chat"  # 手动指定 scope
+    python auth_get_user_token.py --print-auth-url --json  # 仅输出授权链接（JSON 格式）
+    python auth_get_user_token.py --callback-url "<URL>" --json  # 从回调 URL 提取 code 完成授权
+    python auth_get_user_token.py --code "<CODE>" --json   # 直接提供 code 完成授权
 
 scope 来源：
     默认从 config/permissions.json 读取 user scopes（含 offline_access）。
     --minimal 可跳过自动读取，仅请求 offline_access。
     --scope 可手动指定，覆盖自动读取。
 
-流程：
+参数：
+    --redirect-uri      重定向 URL（默认 http://localhost:8080/callback），需在飞书开放平台配置
+    --minimal           仅请求 offline_access scope，不自动加载全部 user scope
+    --scope             手动指定 scope（空格分隔），覆盖自动读取
+    --auto-callback     启动本地 HTTP server 自动捕获回调 code（仅本地环境可用）
+    --callback-timeout  自动回调最长等待秒数（默认 300）
+    --print-auth-url    仅生成并输出授权链接，不等待回调。搭配 --json 输出结构化 JSON
+    --callback-url      从浏览器回调 URL 中提取 code 并完成授权（平台环境推荐）
+    --code              直接提供 authorization code 完成授权
+    --json              以 JSON 格式输出结果，方便机器解析（平台/Agent 环境建议使用）
+
+流程（本地环境）：
     1. 运行脚本，授权链接保存到配置目录的 _auth_url.txt
     2. 从该文件复制链接到浏览器（不要从终端输出复制，避免 URL 被截断），完成飞书授权
     3. 浏览器跳转到 redirect_uri（页面会报错，看地址栏即可）
@@ -27,6 +41,14 @@ scope 来源：
     6. 自动从 API 拉取用户信息写入 settings.json
     7. 自动从 API 拉取 tenant scopes 写入 permissions.json
     8. user 模式下自动生成默认 risk_policy.json
+
+流程（平台/Agent 环境）：
+    1. 运行 python auth_get_user_token.py --print-auth-url --json
+    2. 将输出中的 auth_url 发给用户，用户在本地浏览器打开并完成飞书授权
+    3. 用户将浏览器跳转后的完整回调 URL（含 ?code=...）贴回对话
+    4. 运行 python auth_get_user_token.py --callback-url "<用户贴回的 URL>" --json
+    5. 脚本自动提取 code、换取 token、保存凭证并输出结果 JSON
+    6. 也可由 Agent 直接提取 code 参数，用 --code "<CODE>" --json 完成授权
 
 token 刷新：
     脚本会同时获取 refresh_token（需 scope=offline_access），有效期约 30 天。
@@ -52,19 +74,22 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent))
-from feishu_common import FeishuClient, cli_run, write_default_risk_policy
-from feishu_common._endpoint_registry import ENDPOINT_REGISTRY, BOTH, USER_ONLY
+from feishu_common import FeishuClient, cli_run, log_config_paths, print_json, write_default_risk_policy
 from feishu_common._config_loader import (
+    get_config_context,
     resolve_config_path,
     get_config_dir,
     safe_write_json,
     load_credentials_data,
     load_permissions_config,
 )
+from feishu_common._endpoint_registry import ENDPOINT_REGISTRY, BOTH, USER_ONLY
 
-# OAuth scope 名称修正：飞书权限管理页面的名称与 OAuth scope 不总是一致
+# OAuth scope 名称修正：飞书权限管理页面的名称与 OAuth scope 不总是一致。
+# 当 registry 中的 scope 名与 OAuth 实际可请求的 scope 名不一致时，在此处建立映射。
+# 注意：此处只影响 OAuth 授权请求阶段，不影响运行时的权限检查。
 _SCOPE_FIXES = {
-    "im:message.send_as_user": "im:message",
+    # 示例："registry:scope:name": "oauth:scope:name"
 }
 
 # 核心 user scopes：首次 OAuth 授权或推导失败时使用的最小必要 scope 集合。
@@ -173,7 +198,6 @@ def _derive_user_scopes_from_tenant_scopes(tenant_scopes):
             continue
         required_tenant = set(config.get("scopes", {}).get("tenant", []))
         if not required_tenant:
-            # 纯 user 接口，无法从 tenant 开通情况推导
             continue
         if not required_tenant.issubset(tenant_set):
             continue
@@ -232,6 +256,46 @@ def _load_user_scopes(client=None):
         fixed.add(_SCOPE_FIXES.get(s, s))
     _warn_admin_approval_scopes(fixed)
     return sorted(fixed), "core_fallback"
+
+
+def _build_auth_url(client, scopes, redirect_uri):
+    """构建 OAuth v2 授权页面 URL。
+
+    Args:
+        client: FeishuClient 实例（需有 app_id 属性）。
+        scopes: scope 字符串列表。
+        redirect_uri: 回调地址。
+
+    Returns:
+        完整的授权 URL 字符串。
+    """
+    scope_str = " ".join(scopes)
+    return (
+        f"https://accounts.feishu.cn/open-apis/authen/v1/authorize"
+        f"?client_id={client.app_id}"
+        f"&redirect_uri={urllib.parse.quote(redirect_uri, safe='')}"
+        f"&scope={urllib.parse.quote(scope_str, safe='')}"
+        f"&response_type=code"
+    )
+
+
+def _extract_code_from_url(url):
+    """从回调 URL 中提取 authorization code 参数。
+
+    Args:
+        url: 浏览器回调的完整 URL。
+
+    Returns:
+        authorization code 字符串。
+
+    Raises:
+        RuntimeError: URL 中不包含 code 参数。
+    """
+    parsed = urllib.parse.urlparse(url)
+    codes = urllib.parse.parse_qs(parsed.query).get("code", [])
+    if not codes:
+        raise RuntimeError(f"无法从回调 URL 提取 code: {url}")
+    return codes[0]
 
 
 def exchange_code_for_token(client, code, redirect_uri):
@@ -294,8 +358,10 @@ def _auto_populate_settings(client, creds_path):
         settings["user"] = {**settings.get("user", {}), **user_info}
         safe_write_json(settings_path, settings)
         print(f"   用户信息已自动写入 {settings_path}（{user_info['name']}）", file=sys.stderr)
+        return True, None
     except Exception as e:
         print(f"   ⚠ 自动填充 settings 失败: {e}", file=sys.stderr)
+        return False, str(e)
 
 
 def _auto_sync_permissions(client, user_scopes):
@@ -307,8 +373,103 @@ def _auto_sync_permissions(client, user_scopes):
         payload = build_permissions_payload(tenant_scopes, user_scopes or [])
         safe_write_json(permissions_path, payload)
         print(f"   权限已自动同步到 {permissions_path}（tenant={len(tenant_scopes)}, user={len(user_scopes or [])}）", file=sys.stderr)
+        return True, None
     except Exception as e:
         print(f"   ⚠ 自动同步 permissions 失败: {e}", file=sys.stderr)
+        return False, str(e)
+
+
+def _exchange_and_finish(client, code, redirect_uri, creds_write_path,
+                         creds_source_path, json_mode=False):
+    """用授权码换取 token 并完成后续设置：保存凭证、重建 client、
+    自动填充 settings、同步权限、写入 risk policy。
+
+    Args:
+        client: FeishuClient 实例。
+        code: 授权码。
+        redirect_uri: 回调地址。
+        creds_write_path: 凭证写入路径。
+        creds_source_path: 凭证源路径。
+        json_mode: 为 True 时以 JSON 格式输出结果到 stdout。
+
+    Returns:
+        (success: bool, info: dict)
+    """
+    # Exchange code for token (OAuth v2)
+    print("\n正在换取 user_access_token...", file=sys.stderr)
+    token_data = exchange_code_for_token(client, code, redirect_uri)
+
+    user_access_token = token_data.get("access_token", "")
+    refresh_token = token_data.get("refresh_token", "")
+    expires_in = token_data.get("expires_in", 0)
+    refresh_expires_in = token_data.get("refresh_token_expires_in", 0) or 2592000  # 默认 30 天
+    scope_text = token_data.get("scope", "")
+    user_scopes = sorted({item for item in scope_text.split() if item})
+
+    if not user_access_token:
+        raise RuntimeError(f"响应中未包含 access_token: {token_data}")
+
+    # 云模式下 Bitable 基础设施必须已配置
+    if not client._cloud_token_manager:
+        raise RuntimeError(
+            "cloud mode: Bitable infrastructure is not configured. "
+            "Please run python3 feishu-setup/setup_bitable_infrastructure.py first."
+        )
+
+    # 保存凭证：userAccessToken 写入 credentials.json 作为非权威缓存；
+    # refresh_token 通过 CloudTokenManager 写入 Bitable（不落地本地）。
+    bitable_record_id = client._save_user_token(
+        user_access_token,
+        refresh_token,
+        expires_in,
+        refresh_expires_in,
+        scopes=user_scopes,
+    )
+
+    print(f"\n✅ user_access_token 已保存到 {creds_write_path}", file=sys.stderr)
+    print(f"   有效期: {expires_in} 秒（约 {expires_in // 3600} 小时）", file=sys.stderr)
+    if refresh_token:
+        print(
+            f"   refresh_token 已追加到 Bitable，有效期 {refresh_expires_in} 秒"
+            f"（约 {refresh_expires_in // 86400} 天）。",
+            file=sys.stderr,
+        )
+    if user_scopes:
+        print(f"   已记录 user scopes: {len(user_scopes)} 项。", file=sys.stderr)
+
+    # 必须用写入新 token 后的凭证重新创建 client，否则旧 client 仍持有过期 token，
+    # 调用 API 时会触发 refresh_token 刷新逻辑，可能把刚写入的新 token 覆盖或清空。
+    client = FeishuClient(str(creds_write_path))
+    settings_populated, settings_error = _auto_populate_settings(client, creds_source_path)
+    permissions_synced, permissions_error = _auto_sync_permissions(client, user_scopes)
+
+    risk_policy_created = write_default_risk_policy()
+    if risk_policy_created:
+        print(f"   已自动生成默认 risk_policy.json（user 模式）", file=sys.stderr)
+
+    cloud_manager = client._cloud_token_manager
+    result = {
+        "success": True,
+        "token_path": str(creds_write_path),
+        "expires_in": expires_in,
+        "refresh_expires_in": refresh_expires_in,
+        "scopes": user_scopes,
+        "cloud_mode_enabled": bool(cloud_manager),
+        "bitable_app_token": cloud_manager.bitable_app_token if cloud_manager else None,
+        "bitable_table_id": cloud_manager.bitable_table_id if cloud_manager else None,
+        "refresh_token_fingerprint": f"{refresh_token[:6]}...{refresh_token[-4:]}" if refresh_token and len(refresh_token) >= 12 else "<empty>",
+        "bitable_record_id": bitable_record_id,
+        "settings_populated": settings_populated,
+        "settings_error": settings_error,
+        "permissions_synced": permissions_synced,
+        "permissions_error": permissions_error,
+        "risk_policy_created": risk_policy_created,
+    }
+
+    if json_mode:
+        print_json(result)
+
+    return True, result
 
 
 class _CallbackHandler(BaseHTTPRequestHandler):
@@ -399,7 +560,17 @@ def main():
                         help="启动本地 HTTP server 自动捕获回调 code（默认手动粘贴）")
     parser.add_argument("--callback-timeout", type=int, default=300,
                         help="自动回调最长等待秒数（默认 300）")
+    parser.add_argument("--print-auth-url", action="store_true",
+                        help="仅生成并输出授权链接，不等待回调")
+    parser.add_argument("--callback-url", default=None,
+                        help="从浏览器回调 URL 中提取 code 并完成授权")
+    parser.add_argument("--code", default=None,
+                        help="直接提供 authorization code 完成授权")
+    parser.add_argument("--json", action="store_true",
+                        help="以 JSON 格式输出结果")
     args = parser.parse_args()
+
+    log_config_paths()
 
     config_dir = get_config_dir(for_write=True)
     creds_write_path = resolve_config_path("credentials.json", for_write=True)
@@ -413,114 +584,100 @@ def main():
     if args.scope:
         scopes = sorted(set(args.scope.split()))
         scope_source = "manual"
+        _warn_admin_approval_scopes(scopes)
     elif args.minimal:
         scopes = ["offline_access"]
         scope_source = "minimal"
+        _warn_admin_approval_scopes(scopes)
     else:
         scopes, scope_source = _load_user_scopes(client)
 
-    scope_str = " ".join(scopes)
+    # Step 2: Build auth URL (OAuth v2)
+    auth_url = _build_auth_url(client, scopes, args.redirect_uri)
 
-    # Step 2: Construct auth URL (OAuth v2)
-    auth_url = (
-        f"https://accounts.feishu.cn/open-apis/authen/v1/authorize"
-        f"?client_id={client.app_id}"
-        f"&redirect_uri={urllib.parse.quote(args.redirect_uri, safe='')}"
-        f"&scope={urllib.parse.quote(scope_str, safe='')}"
-        f"&response_type=code")
+    # --print-auth-url mode: 仅输出授权链接并退出
+    if args.print_auth_url:
+        auth_url_path = config_dir / "_auth_url.txt"
+        auth_url_path.write_text(auth_url, encoding="utf-8")
+        ctx = get_config_context()
+        result = {
+            "auth_url": auth_url,
+            "scopes": scopes,
+            "scope_source": scope_source,
+            "config_dir": str(ctx["config_dir"]),
+            "source": ctx["source"],
+        }
+        if args.json:
+            print_json(result)
+        else:
+            print(auth_url)
+        return
 
-    # 将授权链接写入文件，避免终端/对话复述时 URL 被意外截断或篡改
-    auth_url_path = config_dir / "_auth_url.txt"
-    auth_url_path.write_text(auth_url, encoding="utf-8")
-    config_dir_for_display = config_dir
+    # Step 3: Get authorization code
+    if args.code:
+        code = args.code
+    elif args.callback_url:
+        code = _extract_code_from_url(args.callback_url)
+    elif args.auto_callback:
+        # 自动捕获回调：先写入授权文件并打印指引
+        auth_url_path = config_dir / "_auth_url.txt"
+        auth_url_path.write_text(auth_url, encoding="utf-8")
 
+        _print_auth_instructions(args, auth_url, auth_url_path, config_dir,
+                                 scopes, scope_source, auto_callback=True)
+
+        code = _capture_callback_code(args.redirect_uri, timeout=args.callback_timeout)
+        # 清理临时授权链接文件
+        try:
+            auth_url_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+    else:
+        # 默认交互模式：写入文件并等待手动粘贴
+        auth_url_path = config_dir / "_auth_url.txt"
+        auth_url_path.write_text(auth_url, encoding="utf-8")
+
+        _print_auth_instructions(args, auth_url, auth_url_path, config_dir,
+                                 scopes, scope_source, auto_callback=False)
+
+        callback_url = input("\n请粘贴回调 URL: ").strip()
+        if not callback_url:
+            print("未提供回调 URL，已取消。", file=sys.stderr)
+            sys.exit(0)
+        code = _extract_code_from_url(callback_url)
+        # 清理临时授权链接文件
+        try:
+            auth_url_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    # Step 4: Exchange and finish
+    _exchange_and_finish(client, code, args.redirect_uri, creds_write_path,
+                         creds_source_path, json_mode=args.json)
+
+
+def _print_auth_instructions(args, auth_url, auth_url_path, config_dir,
+                             scopes, scope_source, auto_callback=False):
+    """向 stderr 输出授权操作指引。"""
     print("=" * 60, file=sys.stderr)
     print("请按以下步骤操作：", file=sys.stderr)
     print("1. 确保已在飞书开放平台 → 安全设置 → 重定向 URL", file=sys.stderr)
     print(f"   中配置了: {args.redirect_uri}", file=sys.stderr)
     print(f"2. 授权链接已保存到: {auth_url_path}", file=sys.stderr)
-    print(f"   配置目录: {config_dir_for_display}", file=sys.stderr)
-    if args.auto_callback:
+    print(f"   配置目录: {config_dir}", file=sys.stderr)
+    if auto_callback:
         print("   已启用 --auto-callback，脚本会自动捕获浏览器回调", file=sys.stderr)
     else:
         print("   请用浏览器打开该文件中的链接并完成授权", file=sys.stderr)
     print(f"   （请求 {len(scopes)} 个 scope）", file=sys.stderr)
+    if not auto_callback:
+        print("3. 授权后，从浏览器地址栏复制完整的回调 URL", file=sys.stderr)
+        print("   （包含 ?code=... 的那一串）", file=sys.stderr)
     if scope_source == "tenant_derived":
         print(f"   权限来源: 从已开通 tenant scopes 推导", file=sys.stderr)
     elif scope_source == "core_fallback":
         print(f"   权限来源: 核心 scope（未检测到已开通权限）", file=sys.stderr)
-    if not args.auto_callback:
-        print("3. 授权后，从浏览器地址栏复制完整的回调 URL", file=sys.stderr)
-        print("   （包含 ?code=... 的那一串）", file=sys.stderr)
     print("=" * 60, file=sys.stderr)
-
-    # Step 3: Get authorization code
-    if args.auto_callback:
-        code = _capture_callback_code(args.redirect_uri, timeout=args.callback_timeout)
-    else:
-        callback_url = input("\n请粘贴回调 URL: ").strip()
-        if not callback_url:
-            print("未提供回调 URL，已取消。", file=sys.stderr)
-            sys.exit(0)
-        parsed = urllib.parse.urlparse(callback_url)
-        query_params = urllib.parse.parse_qs(parsed.query)
-        codes = query_params.get("code", [])
-        if not codes:
-            raise RuntimeError(f"无法从 URL 中提取 code，请检查回调 URL: {callback_url}")
-        code = codes[0]
-
-    # 已获取 code，清理临时授权链接文件
-    try:
-        auth_url_path.unlink()
-    except Exception:
-        pass
-
-    # Step 4: Exchange code for token (OAuth v2)
-    print("\n正在换取 user_access_token...", file=sys.stderr)
-    token_data = exchange_code_for_token(client, code, args.redirect_uri)
-
-    user_access_token = token_data.get("access_token", "")
-    refresh_token = token_data.get("refresh_token", "")
-    expires_in = token_data.get("expires_in", 0)
-    refresh_expires_in = token_data.get("refresh_token_expires_in", 0) or 2592000  # 默认 30 天
-    scope_text = token_data.get("scope", "")
-    user_scopes = sorted({item for item in scope_text.split() if item})
-
-    if not user_access_token:
-        raise RuntimeError(f"响应中未包含 access_token: {token_data}")
-
-    # Step 5: Save to credentials.json
-    now = time.time()
-    with open(creds_source_path, "r", encoding="utf-8") as f:
-        creds = json.load(f)
-    creds["userAccessToken"] = user_access_token
-    creds["userTokenExpire"] = now + expires_in
-    if refresh_token:
-        creds["refreshToken"] = refresh_token
-        creds["refreshTokenExpire"] = now + refresh_expires_in
-    if user_scopes:
-        creds["userScopes"] = user_scopes
-    safe_write_json(creds_write_path, creds, mode=0o600)
-
-    print(f"\n✅ user_access_token 已保存到 {creds_write_path}", file=sys.stderr)
-    print(f"   有效期: {expires_in} 秒（约 {expires_in // 3600} 小时）", file=sys.stderr)
-    if refresh_token:
-        print(f"   refresh_token 也已保存，有效期 {refresh_expires_in} 秒（约 {refresh_expires_in // 86400} 天）。", file=sys.stderr)
-    if user_scopes:
-        print(f"   已记录 user scopes: {len(user_scopes)} 项。", file=sys.stderr)
-
-    # Step 6: 自动拉取用户信息写入 settings.json
-    # 必须用写入新 token 后的凭证重新创建 client，否则旧 client 仍持有过期 token，
-    # 调用 API 时会触发 refresh_token 刷新逻辑，可能把刚写入的新 token 覆盖或清空。
-    client = FeishuClient(str(creds_write_path))
-    _auto_populate_settings(client, creds_source_path)
-
-    # Step 7: 自动同步 tenant scopes 写入 permissions.json
-    _auto_sync_permissions(client, user_scopes)
-
-    # Step 8: user 模式下自动生成默认 risk_policy.json
-    if write_default_risk_policy():
-        print(f"   已自动生成默认 risk_policy.json（user 模式）", file=sys.stderr)
 
 
 if __name__ == "__main__":

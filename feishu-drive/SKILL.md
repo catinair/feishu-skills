@@ -14,22 +14,31 @@ metadata:
 
 ## 权限要求
 
-> **说明**：以下标注的审批要求基于常见企业配置。实际是否需要管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
-
-| 脚本 | 所需权限 | 审批说明 |
-|------|---------|----------|
-| drive_search.py | `drive:drive.search:readonly` | 一般无需管理员审批 |
-| drive_list.py | `drive:drive.search:readonly` | 一般无需管理员审批 |
-| drive_copy.py | `drive:file` | 通常需管理员审批 |
-| drive_download.py | `drive:file` / `docs:document.media:download` | 通常需管理员审批 |
-| drive_upload.py | `drive:file` | 通常需管理员审批 |
-| drive_move.py | `drive:drive` 或 `space:document:move` | 通常需管理员审批 |
-| drive_delete.py | `drive:drive` 或 `space:document:delete` | 通常需管理员审批 |
-| drive_export.py | `docs:document.content:read` / `docs:document:export` | 一般无需管理员审批 |
+| 脚本 | 所需权限 | 状态 |
+|------|---------|------|
+| drive_search.py | `drive:drive.search:readonly` | 已开通 |
+| drive_list.py | `drive:drive.search:readonly` | 已开通 |
+| drive_copy.py | `drive:file` | 已开通 |
+| drive_download.py | `drive:file` / `docs:document.media:download` | 已开通 |
+| drive_upload.py | `drive:file` | 已开通 |
+| drive_move.py | `drive:drive` 或 `space:document:move` | **需申请** |
+| drive_delete.py | `drive:drive` 或 `space:document:delete` | **需申请** |
+| drive_export.py | `docs:document.content:read` / `docs:document:export` | **需申请** |
+| drive_create_folder.py | `space:folder:create`（user/tenant 均可） | 已开通 |
 
 > **注意**：
-> - `drive:drive` 是高级权限，包含文件的移动、删除、重命名等管理操作，通常需要飞书管理员审批。如需使用 move/delete，请在飞书开放平台申请该权限并联系管理员审批。
-> - `drive_export.py` 需要 `docs:document:export` 权限，如遇 `99991672` 权限错误，请在飞书开放平台检查该权限是否已添加。
+> - `drive:drive` 是高级权限，包含文件的移动、删除、重命名等管理操作。当前应用尚未开通，如需使用 move/delete，请在飞书开放平台申请该权限。
+> - `drive_export.py` 需要 `docs:document:export` 权限，如遇 `99991672` 权限错误，请在飞书开放平台申请。
+
+## 输出说明
+
+本模块的写操作类 CLI（如创建、更新、删除等）默认输出精简摘要，便于 AI 消费。如需完整 API 原始响应，请加 `--raw`：
+
+```bash
+python3 feishu-drive/drive_upload.py --path ./file.txt --raw
+```
+
+通用 CLI 约定（`--yes`、`--raw`、`--identity`）详见项目级文档 [`docs/usage.md`](../docs/usage.md)。
 
 ## 快捷命令
 
@@ -109,6 +118,23 @@ python3 feishu-drive/drive_delete.py --file-token boxcnxxx --type file
 ```
 
 **注意**：删除操作不可恢复。需开通 `drive:drive` 或 `space:document:delete` 权限。
+
+### 创建文件夹
+
+```bash
+# 在默认工作区文件夹内创建（user 身份）
+python3 feishu-drive/drive_create_folder.py "新项目资料"
+
+# 在指定文件夹内创建
+python3 feishu-drive/drive_create_folder.py "子文件夹" --parent fldcnxxx
+
+# 在云空间根目录创建（需 tenant 身份，用于建立默认工作区文件夹）
+python3 feishu-drive/drive_create_folder.py "feishu-skills 默认工作区" --parent "" --identity tenant
+```
+
+- `--parent` 不传时使用 `config/risk_policy.json` 中标记为 `default` 的受信文件夹。
+- `--parent ""` 表示在云空间根目录创建。
+- folder 创建后，如需共享给用户，使用 `feishu-perm/perm_doc_share.py --type folder --identity tenant`。
 
 ### 导出文档
 

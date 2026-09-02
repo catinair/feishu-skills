@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--app", required=True, help="Base token 或 URL")
     parser.add_argument("--table", required=True, help="数据表 ID")
     parser.add_argument("--records-file", required=True, help="记录数组 JSON 文件路径")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
     args = parser.parse_args()
 
@@ -42,7 +43,17 @@ def main():
 
     client = create_client()
     result = client.base_batch_create_records(app_token, table_id, records)
-    print_json(result)
+
+    if args.raw:
+        print_json(result)
+        return
+
+    records_list = result.get("records", [])
+    print_json({
+        "status": "ok",
+        "created_count": len(records_list),
+        "records": [{"record_id": r.get("record_id", "")} for r in records_list if isinstance(r, dict)],
+    })
 
 
 if __name__ == "__main__":

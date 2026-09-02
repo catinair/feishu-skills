@@ -58,54 +58,62 @@ metadata:
 
 ## 权限要求
 
-> **说明**：以下标注的审批要求基于常见企业配置。实际是否通常需管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
-
-| 脚本 | 所需权限 | 审批说明 |
+| 脚本 | 所需权限 | 状态 |
 |------|---------|------|
-| base_create.py | `base:app:create` | 一般无需管理员审批 |
-| base_get.py | `base:app:read` | 一般无需管理员审批 |
-| base_copy.py | `base:app:create` | 一般无需管理员审批 |
-| base_tables.py | `base:field:read` | 一般无需管理员审批 |
-| base_table_create.py | `base:table:create` | 一般无需管理员审批 |
-| base_table_delete.py | `base:table:delete` | 一般无需管理员审批 |
-| base_fields.py | `base:field:read` | 一般无需管理员审批 |
-| base_views.py | `base:view:read` | 一般无需管理员审批 |
-| base_query.py | `base:record:read` | 一般无需管理员审批 |
-| base_append.py | `base:record:create` | 一般无需管理员审批 |
-| base_update.py | `base:record:update` | 一般无需管理员审批 |
-| base_delete.py | `base:record:delete` | 一般无需管理员审批 |
-| base_batch_update.py | `base:record:update` | 一般无需管理员审批 |
-| base_batch_delete.py | `base:record:delete` | 一般无需管理员审批 |
-| base_record_get.py | `base:record:read` | 一般无需管理员审批 |
-| base_batch_create.py | `base:record:create` | 一般无需管理员审批 |
-| base_table_get.py | `base:table:read` | 一般无需管理员审批 |
-| base_table_update.py | `base:table:write_only` | **通常需管理员审批** |
-| base_field_create.py | `base:field:create` | **通常需管理员审批** |
-| base_field_delete.py | `base:field:delete` | **通常需管理员审批** |
-| base_field_update.py | `base:field:update` | **通常需管理员审批** |
-| base_field_get.py | `base:field:read` | 一般无需管理员审批 |
-| base_view_create.py | `base:view:write_only` | **通常需管理员审批** |
-| base_view_delete.py | `base:view:write_only` | **通常需管理员审批** |
-| base_view_rename.py | `base:view:write_only` | **通常需管理员审批** |
-| base_record_search.py | `base:record:read` | 一般无需管理员审批 |
-| base_record_upsert.py | `base:record:create` / `base:record:update` | 一般无需管理员审批 |
-| base_record_upload_attachment.py | `base:record:update` / `drive:file` | 一般无需管理员审批 |
-| base_view_get.py | `base:view:read` | 一般无需管理员审批 |
-| base_view_filter_get.py | `base:view:read` | **通常需管理员审批** |
-| base_view_filter_set.py | `base:view:write_only` | **通常需管理员审批** |
-| base_view_sort_get.py | `base:view:read` | **通常需管理员审批** |
-| base_view_sort_set.py | `base:view:write_only` | **通常需管理员审批** |
-| base_view_group_get.py | `base:view:read` | **通常需管理员审批** |
-| base_view_group_set.py | `base:view:write_only` | **通常需管理员审批** |
-| base_view_visible_fields_get.py | `base:view:read` | **通常需管理员审批** |
-| base_view_visible_fields_set.py | `base:view:write_only` | **通常需管理员审批** |
-| base_data_query.py | `base:table:read` | **通常需管理员审批** |
-| base_record_history_list.py | `base:history:read` | **通常需管理员审批** |
-| base_field_search_options.py | `base:field:read` | **通常需管理员审批** |
+| base_create.py | `base:app:create` | 已开通 |
+| base_get.py | `base:app:read` | 已开通 |
+| base_copy.py | `base:app:create` | 已开通 |
+| base_tables.py | `base:field:read` | 已开通 |
+| base_table_create.py | `base:table:create` | 已开通 |
+| base_table_delete.py | `base:table:delete` | 已开通 |
+| base_fields.py | `base:field:read` | 已开通 |
+| base_views.py | `base:view:read` | 已开通 |
+| base_query.py | `base:record:read` | 已开通 |
+| base_append.py | `base:record:create` | 已开通 |
+| base_update.py | `base:record:update` | 已开通 |
+| base_delete.py | `base:record:delete` | 已开通 |
+| base_batch_update.py | `base:record:update` | 已开通 |
+| base_batch_delete.py | `base:record:delete` | 已开通 |
+| base_record_get.py | `base:record:read` | 已开通 |
+| base_batch_create.py | `base:record:create` | 已开通 |
+| base_table_get.py | `base:table:read` | 已开通 |
+| base_table_update.py | `base:table:write_only` | **需申请** |
+| base_field_create.py | `base:field:create` | **需申请** |
+| base_field_delete.py | `base:field:delete` | **需申请** |
+| base_field_update.py | `base:field:update` | **需申请** |
+| base_field_get.py | `base:field:read` | 已开通 |
+| base_view_create.py | `base:view:write_only` | **需申请** |
+| base_view_delete.py | `base:view:write_only` | **需申请** |
+| base_view_rename.py | `base:view:write_only` | **需申请** |
+| base_record_search.py | `base:record:read` | 已开通 |
+| base_record_upsert.py | `base:record:create` / `base:record:update` | 已开通 |
+| base_record_upload_attachment.py | `base:record:update` / `drive:file` | 已开通 |
+| base_view_get.py | `base:view:read` | 已开通 |
+| base_view_filter_get.py | `base:view:read` | **需申请** |
+| base_view_filter_set.py | `base:view:write_only` | **需申请** |
+| base_view_sort_get.py | `base:view:read` | **需申请** |
+| base_view_sort_set.py | `base:view:write_only` | **需申请** |
+| base_view_group_get.py | `base:view:read` | **需申请** |
+| base_view_group_set.py | `base:view:write_only` | **需申请** |
+| base_view_visible_fields_get.py | `base:view:read` | **需申请** |
+| base_view_visible_fields_set.py | `base:view:write_only` | **需申请** |
+| base_data_query.py | `base:table:read` | **需申请** |
+| base_record_history_list.py | `base:history:read` | **需申请** |
+| base_field_search_options.py | `base:field:read` | **需申请** |
 
 > **注意**：
-> - `base:table:write_only`、`base:field:create/delete/update`、`base:view:write_only` 是高级权限，通常需要飞书管理员审批。如遇 403 权限错误，请在飞书开放平台申请对应权限并联系管理员审批。
-> - **Base v3 API**（`base_view_filter_get/set`、`base_view_sort_get/set`、`base_view_group_get/set`、`base_view_visible_fields_get/set`、`base_data_query`、`base_record_history_list`、`base_field_search_options`）需要 `base:base` 或更细粒度的 v3 权限，通常需要管理员审批。如遇 `99991672` 权限错误，请在飞书开放平台申请对应权限并联系管理员审批。
+> - `base:table:write_only`、`base:field:create/delete/update`、`base:view:write_only` 是高级权限，当前应用可能尚未开通。如遇 403 权限错误，请在飞书开放平台申请对应权限。
+> - **Base v3 API**（`base_view_filter_get/set`、`base_view_sort_get/set`、`base_view_group_get/set`、`base_view_visible_fields_get/set`、`base_data_query`、`base_record_history_list`、`base_field_search_options`）需要 `base:base` 或更细粒度的 v3 权限。当前应用可能尚未开通，如遇 `99991672` 权限错误，请在飞书开放平台申请对应权限。
+
+## 输出说明
+
+本模块的写操作类 CLI（如创建、更新、删除等）默认输出精简摘要，便于 AI 消费。如需完整 API 原始响应，请加 `--raw`：
+
+```bash
+python3 feishu-base/base_append.py --app base_token --table tblxxx --fields '{"字段": "值"}' --raw
+```
+
+通用 CLI 约定（`--yes`、`--raw`、`--identity`）详见项目级文档 [`docs/usage.md`](../docs/usage.md)。
 
 ## 快捷命令
 
@@ -190,7 +198,7 @@ python3 feishu-base/base_record_get.py --app base_token_or_url --table table_id 
 python3 feishu-base/base_query.py --app XqA3bAtGpaWjflsryxfcadp7nmf --table tblOflmn3KGcgUsn
 
 # 从 URL 自动提取 app_token 和 table_id
-python3 feishu-base/base_query.py --app "https://example.feishu.cn/base/XqA3bAtGpaWjflsryxfcadp7nmf?table=tblOflmn3KGcgUsn"
+python3 feishu-base/base_query.py --app "https://ying-dao.feishu.cn/base/XqA3bAtGpaWjflsryxfcadp7nmf?table=tblOflmn3KGcgUsn"
 
 # 带筛选条件（飞书 filter 语法）
 python3 feishu-base/base_query.py --app base_token --table table_id --filter "CurrentValue.[姓名] = \"张三\""

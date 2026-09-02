@@ -34,6 +34,16 @@ metadata:
 
 > **注意**：当前 `feishu-task` 模块已按 `user_access_token` 实现。若未来飞书开放平台确认部分 task 接口支持稳定的应用身份，再评估是否补 tenant 兼容路径。
 
+## 输出说明
+
+本模块的写操作类 CLI（如创建、更新、删除等）默认输出精简摘要，便于 AI 消费。如需完整 API 原始响应，请加 `--raw`：
+
+```bash
+python3 feishu-task/task_create.py --summary "测试任务" --raw
+```
+
+通用 CLI 约定（`--yes`、`--raw`、`--identity`）详见项目级文档 [`docs/usage.md`](../docs/usage.md)。
+
 ## 快捷命令
 
 ### 创建任务

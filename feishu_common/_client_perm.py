@@ -1,22 +1,52 @@
 #!/usr/bin/env python3
 """_client_perm.py -- 权限相关 API mixin。"""
 
+
 class PermMixin:
-    def perm_list_members(self, token, type, use_user_token=None):
+    def perm_list_members(
+        self,
+        token,
+        type,
+        page_size=50,
+        page_token=None,
+        max_results=None,
+        use_user_token=None,
+    ):
         """列出文档/云空间对象的协作者
-    
+
         type: docx / sheet / bitable / file / folder / mindnote / slides
         """
-        return self._request(
+        query = {"type": type, "page_size": page_size}
+        if page_token:
+            query["page_token"] = page_token
+            return self._request(
+                "GET",
+                f"/open-apis/drive/v1/permissions/{token}/members",
+                query=query,
+                use_user_token=use_user_token,
+            )
+
+        members = self._paginate(
             "GET",
             f"/open-apis/drive/v1/permissions/{token}/members",
-            query={"type": type},
+            items_key="members",
+            page_size=page_size,
+            max_results=max_results,
+            extra_query={"type": type},
             use_user_token=use_user_token,
         )
-    
-    def perm_add_member(self, token, type, member_id, member_type, perm, use_user_token=None):
+        return {
+            "total": len(members),
+            "members": members,
+            "items": members,
+            "has_more": False,
+        }
+
+    def perm_add_member(
+        self, token, type, member_id, member_type, perm, use_user_token=None
+    ):
         """添加协作者
-    
+
         member_type: openid / union_id / user_id / openchat / department_id
         perm: view / edit / full_access
         """
@@ -27,7 +57,7 @@ class PermMixin:
             body={"member_id": member_id, "member_type": member_type, "perm": perm},
             use_user_token=use_user_token,
         )
-    
+
     def perm_remove_member(self, token, type, member_id, use_user_token=None):
         """移除协作者"""
         return self._request(
