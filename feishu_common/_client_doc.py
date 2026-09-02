@@ -276,11 +276,14 @@ class DocMixin:
                     warnings.append(msg)
 
         # 6. 组装返回值
-        result = last_result if isinstance(last_result, dict) else {}
-        result["warnings"] = warnings
-        result["blocks_total"] = total
-        result["blocks_inserted"] = inserted_count
-        return result
+        # 不再透传 insert_blocks API 原始响应（含大量 block_id_relations 映射），
+        # 避免 AI context 被无意义的内部 block 映射塞满甚至触发截断。
+        return {
+            "status": "ok",
+            "blocks_total": total,
+            "blocks_inserted": inserted_count,
+            "warnings": warnings,
+        }
 
     def document_comments(self, file_token, file_type="docx", page_token=None, page_size=50, is_whole=None, is_solved=None, need_reaction=False, user_id_type="open_id"):
         """获取云文档评论列表（分页）

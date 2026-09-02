@@ -31,6 +31,7 @@ def main():
     parser.add_argument("--complete", action="store_true", help="标记任务为已完成")
     parser.add_argument("--uncomplete", action="store_true", help="恢复任务为未完成")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     update_fields = []
@@ -71,7 +72,18 @@ def main():
         update_fields=update_fields,
         task_data=task_data,
     )
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    task = result if isinstance(result, dict) else {}
+    print_json({
+        "status": "ok",
+        "task_guid": task.get("guid", args.guid),
+        "summary": task.get("summary", ""),
+        "completed": task.get("completed", False),
+        "completed_at": task.get("completed_at", ""),
+    })
 
 if __name__ == "__main__":
     cli_run(main)

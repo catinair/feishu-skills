@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--content", required=True, help="评论内容")
     parser.add_argument("--reply-to", help="回复的评论 ID")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     client = create_client()
@@ -33,7 +34,17 @@ def main():
         content=args.content,
         reply_to_comment_id=args.reply_to,
     )
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    comment = result if isinstance(result, dict) else {}
+    print_json({
+        "status": "ok",
+        "comment_id": comment.get("comment_id", ""),
+        "resource_id": args.resource_id,
+        "reply_to_comment_id": args.reply_to or "",
+    })
 
 if __name__ == "__main__":
     cli_run(main)

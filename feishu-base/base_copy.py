@@ -18,6 +18,7 @@ def main():
     parser.add_argument("--name", required=True, help="新表格名称")
     parser.add_argument("--folder-token", default=DEFAULT_FOLDER_TOKEN, help="目标文件夹 token（默认指定文件夹）")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     app_token, _ = extract_base_info(args.app)
@@ -29,7 +30,15 @@ def main():
         is_trusted=is_trusted_folder(args.folder_token),
     )
     result = client.base_copy(app_token, name=args.name, folder_token=args.folder_token)
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    print_json({
+        "status": "ok",
+        "app_token": result.get("app_token", ""),
+        "name": result.get("name", ""),
+    })
 
 
 if __name__ == "__main__":

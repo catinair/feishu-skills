@@ -28,6 +28,8 @@ def main():
     parser.add_argument("--text", help="文本消息内容（与 --title 二选一）")
     parser.add_argument("--title", help="富文本消息标题（与 --text 二选一）")
     parser.add_argument("--post-lines", help="富文本内容 JSON（二维数组）")
+    parser.add_argument("--identity", choices=["user", "tenant"], help="强制使用 user 或 tenant 身份发送")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
     args = parser.parse_args()
 
@@ -56,12 +58,42 @@ def main():
 
     client = create_client()
 
-    if args.text:
-        result = client.im_send_text(args.receive_id, args.type, args.text)
-    else:
-        result = client.im_send_post(args.receive_id, args.type, args.title, content_lines)
+    use_user_token = {"user": True, "tenant": False}.get(args.identity) if args.identity else None
 
-    print_json(result)
+    if args.text:
+        result = client.im_send_text(args.receive_id, args.type, args.text, use_user_token=use_user_token)
+    else:
+        result = client.im_send_post(args.receive_id, args.type, args.title, content_lines, use_user_token=use_user_token)
+
+    if args.raw:
+        print_json(result)
+        return
+
+    # Determine where the message data lives (wrapped or unwrapped)
+    if isinstance(result, dict):
+        if "data" in result and isinstance(result["data"], dict):
+            msg_data = result["data"]
+            status = "ok" if result.get("code") == 0 else "error"
+        else:
+            msg_data = result
+            status = "ok" if ("code" not in msg_data or msg_data.get("code") == 0) else "error"
+    else:
+        msg_data = {}
+        status = "ok"
+
+    summary = {
+        "status": status,
+        "message_id": msg_data.get("message_id", ""),
+        "chat_id": msg_data.get("chat_id", ""),
+        "msg_type": msg_data.get("msg_type", ""),
+        "create_time": msg_data.get("create_time", ""),
+    }
+
+    sender = msg_data.get("sender")
+    if isinstance(sender, dict):
+        summary["sender_type"] = sender.get("sender_type", "")
+
+    print_json(summary)
 
 if __name__ == "__main__":
     cli_run(main)

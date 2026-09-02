@@ -16,6 +16,7 @@ def main():
     parser.add_argument("--table", help="数据表 ID（可选，默认从 URL 提取）")
     parser.add_argument("--fields", help="字段值 JSON 字符串（与 --fields-file 二选一）")
     parser.add_argument("--fields-file", help="字段值 JSON 文件路径（与 --fields 二选一）")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
     args = parser.parse_args()
 
@@ -39,7 +40,21 @@ def main():
 
     client = create_client()
     result = client.base_create_record(app_token, table_id, fields)
-    print_json(result)
+
+    if args.raw:
+        print_json(result)
+        return
+
+    fields_summary = result.get("fields", {})
+    if isinstance(fields_summary, dict) and len(fields_summary) > 3:
+        keys = list(fields_summary.keys())[:3]
+        fields_summary = {k: fields_summary[k] for k in keys}
+
+    print_json({
+        "status": "ok",
+        "record_id": result.get("record_id", ""),
+        "fields": fields_summary,
+    })
 
 if __name__ == "__main__":
     cli_run(main)

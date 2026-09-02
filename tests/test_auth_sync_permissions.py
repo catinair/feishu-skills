@@ -92,11 +92,12 @@ class TestBuildPermissionsPayload(unittest.TestCase):
     def test_flags_admin_approval_scopes(self):
         payload = build_permissions_payload(
             ["drive:file", "docx:document"],
-            ["docs:permission.member", "im:message"],
+            ["docs:permission.member:readonly", "im:message"],
         )
+        # docs:permission.member:readonly 已调整为免审，不再纳入 admin_approval_scopes
         self.assertEqual(
             sorted(payload["admin_approval_scopes"]),
-            ["docs:permission.member", "drive:file"],
+            ["drive:file"],
         )
 
 

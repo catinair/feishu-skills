@@ -25,6 +25,7 @@ def main():
     parser.add_argument("--name", required=True, help="数据表名称")
     parser.add_argument("--fields-file", help="字段定义 JSON 文件路径（可选）")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     app_token, _ = extract_base_info(args.app)
@@ -41,7 +42,16 @@ def main():
         is_trusted=False,
     )
     result = client.base_create_table(app_token, name=args.name, fields=fields)
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    table = result.get("table", result) if isinstance(result, dict) else {}
+    print_json({
+        "status": "ok",
+        "table_id": table.get("table_id", ""),
+        "name": table.get("name", ""),
+    })
 
 
 if __name__ == "__main__":

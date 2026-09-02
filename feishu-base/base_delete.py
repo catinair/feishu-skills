@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--table", help="数据表 ID（可选，默认从 URL 提取）")
     parser.add_argument("--record", required=True, help="记录 ID（record_id）")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     confirm_action_or_exit("base_delete", f"确认删除记录 {args.record}?", yes=args.yes)
@@ -33,7 +34,15 @@ def main():
 
     client = create_client()
     result = client.base_delete_record(app_token, table_id, args.record)
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    print_json({
+        "status": "ok",
+        "deleted": result.get("deleted", False),
+        "record_id": result.get("record_id", args.record),
+    })
 
 
 if __name__ == "__main__":

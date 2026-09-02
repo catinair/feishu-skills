@@ -41,4 +41,5 @@ from ._shared import (
     confirm_action_or_exit,
     create_client,
     lookup_contact,
+    log_config_paths,
 )

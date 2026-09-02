@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--member", action="append", help="负责人 open_id（可多次指定）")
     parser.add_argument("--extra", help="自定义附带数据")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     due = None
@@ -41,7 +42,17 @@ def main():
         members=members,
         extra=args.extra,
     )
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    task = result if isinstance(result, dict) else {}
+    print_json({
+        "status": "ok",
+        "task_guid": task.get("guid", ""),
+        "summary": task.get("summary", ""),
+        "completed": task.get("completed", False),
+    })
 
 if __name__ == "__main__":
     cli_run(main)

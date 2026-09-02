@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--records", help="逗号分隔的 record_id 列表")
     parser.add_argument("--records-file", help="record_id 数组 JSON 文件路径")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     app_token, table_id = extract_base_info(args.app)
@@ -46,7 +47,15 @@ def main():
 
     client = create_client()
     result = client.base_batch_delete_records(app_token, table_id, record_ids)
-    print_json(result)
+    if args.raw:
+        print_json(result)
+        return
+
+    print_json({
+        "status": "ok",
+        "deleted": result.get("deleted", 0),
+        "record_ids": result.get("record_ids", []),
+    })
 
 
 if __name__ == "__main__":

@@ -62,6 +62,7 @@ def main():
     parser.add_argument("--desc", "-d", help="日程描述")
     parser.add_argument("--location", "-l", help="地点")
     parser.add_argument("--calendar-id", default="primary", help="日历 ID，默认 primary")
+    parser.add_argument("--identity", choices=["user", "tenant"], help="强制使用 user 或 tenant 身份创建")
     parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
     args = parser.parse_args()
@@ -75,6 +76,7 @@ def main():
     confirm_action_or_exit("calendar_create_event", f"确认创建日程「{args.summary}」?", yes=args.yes)
 
     client = create_client()
+    use_user_token = {"user": True, "tenant": False}.get(args.identity) if args.identity else None
     data = client.calendar_create_event(
         calendar_id=args.calendar_id,
         summary=args.summary,
@@ -82,6 +84,7 @@ def main():
         start_time=start,
         end_time=end,
         location=args.location,
+        use_user_token=use_user_token,
     )
     event = data.get("event", {})
 

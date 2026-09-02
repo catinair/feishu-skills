@@ -14,16 +14,24 @@ metadata:
 
 ## 权限要求
 
-> **说明**：以下标注的审批要求基于常见企业配置。实际是否需要管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
-
-| 脚本 | 所需权限 | 审批说明 |
+| 脚本 | 所需权限 | 状态 |
 |------|---------|------|
-| sheet_create.py | `sheets:spreadsheet` / `sheets:spreadsheet:create` | 一般无需管理员审批 |
-| sheet_info.py | `sheets:spreadsheet` | 一般无需管理员审批 |
-| sheet_read.py | `sheets:spreadsheet` | 一般无需管理员审批 |
-| sheet_write.py | `sheets:spreadsheet` | 一般无需管理员审批 |
-| sheet_append.py | `sheets:spreadsheet` | 一般无需管理员审批 |
-| sheet_export_csv.py | `docs:document:export` / `drive:file:download` | 通常需管理员审批 |
+| sheet_create.py | `sheets:spreadsheet` / `sheets:spreadsheet:create` | 已开通 |
+| sheet_info.py | `sheets:spreadsheet` | 已开通 |
+| sheet_read.py | `sheets:spreadsheet` | 已开通 |
+| sheet_write.py | `sheets:spreadsheet` | 已开通 |
+| sheet_append.py | `sheets:spreadsheet` | 已开通 |
+| sheet_export_csv.py | `docs:document:export` / `drive:file:download` | **需申请** |
+
+## 输出说明
+
+本模块的写操作类 CLI（如创建、更新、删除等）默认输出精简摘要，便于 AI 消费。如需完整 API 原始响应，请加 `--raw`：
+
+```bash
+python3 feishu-sheets/sheet_write.py --app sheet_token --range A1:B2 --values "[[1,2],[3,4]]" --raw
+```
+
+通用 CLI 约定（`--yes`、`--raw`、`--identity`）详见项目级文档 [`docs/usage.md`](../docs/usage.md)。
 
 ## 快捷命令
 
@@ -88,7 +96,7 @@ python3 feishu-sheets/sheet_export_csv.py \
 **注意**：
 - 不指定 `--sheet-id` 时自动导出第一个 sheet
 - CSV 是纯文本格式，AI 可直接读取
-- 需开通 `docs:document:export` 权限；若使用 `drive:file:download` 导出，还需飞书管理员审批。
+- 需开通 `docs:document:export` 权限
 
 ## 工作流程
 

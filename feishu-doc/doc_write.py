@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--markdown", help="Markdown 内容字符串")
     parser.add_argument("--markdown-file", help="Markdown 文件路径")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+    parser.add_argument("--raw", action="store_true", help="输出完整原始 JSON")
     args = parser.parse_args()
 
     markdown = None
@@ -38,6 +39,10 @@ def main():
     client = create_client()
     doc_id = extract_doc_id(args.doc)
     result = client.write_markdown(doc_id, markdown)
+    if args.raw:
+        print_json(result)
+        return
+
     print_json(result)
 
 if __name__ == "__main__":

@@ -203,3 +203,19 @@ def cli_run(main_func):
     except FileNotFoundError as e:
         print(f"Error: File not found: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+# ── 配置路径诊断 ──
+
+def log_config_paths():
+    """在 setup/auth 脚本启动时打印当前 canonical 配置路径。"""
+    from feishu_common._config_loader import get_config_context, resolve_config_path
+    ctx = get_config_context()
+    print(
+        f"CONFIG_ROOT: {ctx['config_dir']} (source={ctx['source']})",
+        file=sys.stderr,
+    )
+    print(
+        f"CREDENTIALS_PATH: {resolve_config_path('credentials.json', for_write=True)}",
+        file=sys.stderr,
+    )

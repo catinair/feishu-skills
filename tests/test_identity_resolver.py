@@ -154,14 +154,14 @@ class TestResolveIdentity(unittest.TestCase):
         client = self._make_client()
         try:
             with self.assertRaises(RuntimeError):
-                client._resolve_identity("contact_search_users", False)
+                client._resolve_identity("contact_get_self", False)
         finally:
             self._restore()
 
     def test_explicit_true_with_user_only(self):
         client = self._make_client()
         try:
-            result = client._resolve_identity("contact_search_users", True)
+            result = client._resolve_identity("contact_get_self", True)
             self.assertTrue(result)
         finally:
             self._restore()
@@ -195,7 +195,7 @@ class TestResolveIdentity(unittest.TestCase):
     def test_user_only_returns_true(self):
         client = self._make_client()
         try:
-            result = client._resolve_identity("contact_search_users", None)
+            result = client._resolve_identity("contact_get_self", None)
             self.assertTrue(result)
         finally:
             self._restore()

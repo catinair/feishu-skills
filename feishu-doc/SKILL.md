@@ -14,20 +14,26 @@ metadata:
 
 ## 权限要求
 
-> **说明**：以下标注的审批要求基于常见企业配置。实际是否需要管理员审批，取决于你所在企业管理员在「飞书开放平台 → 自建应用审核规则」中的设置。
+| 脚本 | 所需权限 | 状态 |
+|------|---------|------|
+| doc_token.py | 无 | 已开通 |
+| doc_create.py | `docx:document:create` | 已开通 |
+| doc_write.py | `docx:document.block:convert` | 已开通 |
+| doc_read.py | `docx:document:readonly` | 已开通 |
+| doc_fetch.py | `docx:document:readonly` + `docs:document.media:download` | 已开通 |
+| doc_comments.py（查看） | `docs:document.comment:read`（或 `docs:doc:readonly` / `drive:drive:readonly`） | 已开通 |
+| doc_comments.py（创建） | `docs:document.comment:create`（或 `docs:doc` / `drive:drive`） | 已开通 |
+| doc_comments.py（回复） | `docs:document.comment:create`（或 `docs:doc` / `drive:drive`） | 已开通 |
 
-| 脚本 | 所需权限 | 审批说明 |
-|------|---------|----------|
-| doc_token.py | 无 | 一般无需管理员审批 |
-| doc_create.py | `docx:document:create` | 一般无需管理员审批 |
-| doc_write.py | `docx:document.block:convert` | 一般无需管理员审批 |
-| doc_read.py | `docx:document:readonly` | 一般无需管理员审批 |
-| doc_fetch.py | `docx:document:readonly` + `docs:document.media:download` | 一般无需管理员审批 |
-| doc_comments.py（查看） | `docs:document.comment:read`（或 `docs:doc:readonly` / `drive:drive:readonly`） | 一般无需管理员审批 |
-| doc_comments.py（创建） | `docs:document.comment:create`（或 `docs:doc` / `drive:drive`） | 一般无需管理员审批 |
-| doc_comments.py（回复） | `docs:document.comment:create`（或 `docs:doc` / `drive:drive`） | 一般无需管理员审批 |
+## 输出说明
 
-> **注意**：标注为「一般无需管理员审批」的 scope 仍需在飞书开放平台 → 权限管理中开通；若你的企业启用了严格审核策略，也可能需要管理员审批。
+本模块的写操作类 CLI（如创建、更新、删除等）默认输出精简摘要，便于 AI 消费。如需完整 API 原始响应，请加 `--raw`：
+
+```bash
+python3 feishu-doc/doc_create.py --title "测试文档" --raw
+```
+
+通用 CLI 约定（`--yes`、`--raw`、`--identity`）详见项目级文档 [`docs/usage.md`](../docs/usage.md)。
 
 ## 快捷命令
 
@@ -119,7 +125,7 @@ python3 feishu-doc/doc_fetch.py --doc doxcnxxx --output-dir ./downloads
 - docx / wiki 链接自动解析（wiki token 失败时自动回退查询 obj_token）
 - 画板（board）通过官方 API 导出为 PNG，自动裁剪空白边缘
 - 媒体文件名根据 Content-Disposition 自动推断（保留原始文件名和扩展名）
-- 标准 Markdown 语法：`![](path)` 引用图片，`[name](path)` 引用文件
+- 标准 Markdown 语法：图片用 `![]()`（URL 填图片路径），文件用 `[]()`（URL 填文件路径）
 
 **媒体下载限制**：
 - 可下载：通过 drive 上传后插入文档的媒体（有有效 token）

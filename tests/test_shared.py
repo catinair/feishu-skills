@@ -19,25 +19,25 @@ class TestExtractDocId(unittest.TestCase):
 
     def test_docx_url(self):
         self.assertEqual(
-            extract_doc_id("https://example.feishu.cn/docx/doxcn123abc"),
+            extract_doc_id("https://ying-dao.feishu.cn/docx/doxcn123abc"),
             "doxcn123abc",
         )
 
     def test_doc_url(self):
         self.assertEqual(
-            extract_doc_id("https://example.feishu.cn/doc/doxcn123abc?from=sidebar"),
+            extract_doc_id("https://ying-dao.feishu.cn/doc/doxcn123abc?from=sidebar"),
             "doxcn123abc",
         )
 
     def test_wiki_url(self):
         self.assertEqual(
-            extract_doc_id("https://example.feishu.cn/wiki/wikcn456def"),
+            extract_doc_id("https://ying-dao.feishu.cn/wiki/wikcn456def"),
             "wikcn456def",
         )
 
     def test_url_with_query_and_fragment(self):
         self.assertEqual(
-            extract_doc_id("https://example.feishu.cn/docx/doxcnABC123?q=1#section"),
+            extract_doc_id("https://ying-dao.feishu.cn/docx/doxcnABC123?q=1#section"),
             "doxcnABC123",
         )
 
@@ -55,21 +55,21 @@ class TestExtractBaseInfo(unittest.TestCase):
     def test_full_url(self):
         self.assertEqual(
             extract_base_info(
-                "https://example.feishu.cn/base/XqA3bAtGpaWjflsryxfcadp7nmf?table=tblOflmn3KGcgUsn"
+                "https://ying-dao.feishu.cn/base/XqA3bAtGpaWjflsryxfcadp7nmf?table=tblOflmn3KGcgUsn"
             ),
             ("XqA3bAtGpaWjflsryxfcadp7nmf", "tblOflmn3KGcgUsn"),
         )
 
     def test_url_without_table(self):
         self.assertEqual(
-            extract_base_info("https://example.feishu.cn/base/XqA3bAtGpaWjflsryxfcadp7nmf"),
+            extract_base_info("https://ying-dao.feishu.cn/base/XqA3bAtGpaWjflsryxfcadp7nmf"),
             ("XqA3bAtGpaWjflsryxfcadp7nmf", ""),
         )
 
     def test_url_with_extra_params(self):
         self.assertEqual(
             extract_base_info(
-                "https://example.feishu.cn/base/XqA3bAtGpaWjflsryxfcadp7nmf?table=tblOflmn3KGcgUsn&view=vew123"
+                "https://ying-dao.feishu.cn/base/XqA3bAtGpaWjflsryxfcadp7nmf?table=tblOflmn3KGcgUsn&view=vew123"
             ),
             ("XqA3bAtGpaWjflsryxfcadp7nmf", "tblOflmn3KGcgUsn"),
         )

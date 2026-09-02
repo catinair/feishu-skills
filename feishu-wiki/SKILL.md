@@ -20,6 +20,16 @@ metadata:
 - 列出知识空间及其目录树，确定需要操作的文档/表格/多维表格
 - 在知识库中搜索特定标题的节点
 
+## 输出说明
+
+本模块的写操作类 CLI（如 `wiki_create_node.py`）默认输出精简摘要，便于 AI 消费。如需完整 API 原始响应，请加 `--raw`：
+
+```bash
+python3 feishu-wiki/wiki_create_node.py "测试节点" --space xxx --raw
+```
+
+通用 CLI 约定（`--yes`、`--raw`、`--identity`）详见项目级文档 [`docs/usage.md`](../docs/usage.md)。
+
 ## 工作流
 
 ### 1. 列出知识空间
@@ -47,16 +57,16 @@ python3 feishu-wiki/wiki_list_nodes.py --space-id 7307181174114517020 --page-siz
 
 ```bash
 # 递归遍历所有节点
-python3 feishu-wiki/wiki_list_all_nodes.py --space-id your_space_id
+python3 feishu-wiki/wiki_list_all_nodes.py --space-id 7310041255240073220
 
 # 拼接节点链接（需要传入知识库域名）
-python3 feishu-wiki/wiki_list_all_nodes.py --space-id your_space_id --wiki-base-url https://example.feishu.cn
+python3 feishu-wiki/wiki_list_all_nodes.py --space-id 7310041255240073220 --wiki-base-url https://ying-dao.feishu.cn
 
 # 限制遍历深度
-python3 feishu-wiki/wiki_list_all_nodes.py --space-id your_space_id --max-depth 2
+python3 feishu-wiki/wiki_list_all_nodes.py --space-id 7310041255240073220 --max-depth 2
 
 # 按标题过滤（仅顶层）
-python3 feishu-wiki/wiki_list_all_nodes.py --space-id your_space_id --filter "医药"
+python3 feishu-wiki/wiki_list_all_nodes.py --space-id 7310041255240073220 --filter "医药"
 ```
 
 **输出结构：**
@@ -107,13 +117,13 @@ python3 feishu-wiki/wiki_get_node.py --token OiahwckAfiDIwlkg2fhcwJb7n2b
 
 ```bash
 # 在知识空间根目录创建文档
-python3 feishu-wiki/wiki_create_node.py "会议纪要" --space your_space_id
+python3 feishu-wiki/wiki_create_node.py "会议纪要" --space 7310041255240073220
 
 # 创建表格节点
-python3 feishu-wiki/wiki_create_node.py "数据表" --space your_space_id --type sheet
+python3 feishu-wiki/wiki_create_node.py "数据表" --space 7310041255240073220 --type sheet
 
 # 在指定父节点下创建子文档
-python3 feishu-wiki/wiki_create_node.py "子文档" --space your_space_id --parent OUxxxxx --type docx
+python3 feishu-wiki/wiki_create_node.py "子文档" --space 7310041255240073220 --parent OUxxxxx --type docx
 ```
 
 支持的 `--type`：`docx`（默认）、`sheet`、`bitable`、`mindnote`、`slides`。

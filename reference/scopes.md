@@ -175,11 +175,12 @@
 
 ---
 
-## User Scopes（需用户身份授权，共 68 项）
+## User Scopes（需用户身份授权，共 70 项）
 
 > 以下 scope 需通过 `user_access_token` 调用，Bot 身份不可用。
-> Python 项目中，`contact_get.py` 和 `contact_departments.py` 在需要完整字段时会要求配置 user_access_token。
+> Python 项目中，身份令牌由 resolver 根据 registry 声明的 USER_ONLY / BOTH / APP_ONLY 自动判定，无需脚本硬编码。
 
+- auth:user.id:read `*`
 - bitable:app
 - board:whiteboard:node:create
 - board:whiteboard:node:read
@@ -193,6 +194,7 @@
 - contact:user.email:readonly `*`
 - contact:user.employee_id:readonly `*`
 - contact:user.employee_number:read
+- contact:user:search `*`
 - docs:doc
 - docs:document.comment:read
 - docs:document.media:upload

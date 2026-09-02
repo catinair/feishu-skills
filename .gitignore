@@ -36,6 +36,15 @@ config/risk_policy.json
 
 # 运行时派生缓存
 config/.token_cache.json
+config/.token_history.jsonl
+config/*.lock
+
+# 本地深度排查方案（含测试目标与内部审计清单，不提交）
+docs/internal-deep-investigation-plan.md
+
+# superpowers 设计文档与实施计划（运行时生成，不提交）
+docs/superpowers/
+.superpowers/
 
 # 可选依赖环境
 .venv/
